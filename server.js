@@ -16,12 +16,28 @@ app.use(express.json({ limit: "15mb" }));
 const GLOBAL_KILL_SWITCH = false;
 
 const prototypeDevices = [
+   // DANIELE
   {
     deviceId: "9640400020f1bae8",
     partner: "daniele",
     enabled: true,
     expiresAt: "2026-05-15T23:59:59Z"
-  }
+  },
+  // YOWAY
+{
+  deviceId: "...",
+  partner: "yoway",
+  enabled: true, 
+  expiresAt: "2026-05-20T23:59:59Z"
+},
+
+// STANHOM
+{
+  deviceId: "...",
+  partner: "stanhom",
+  enabled: true,
+  expiresAt: "2026-05-20T23:59:59Z"
+}
 ];
 
 function isProbablyVisualQuestion(text = "") {
