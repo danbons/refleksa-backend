@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
+import jwt from "jsonwebtoken";
 
 const app = express();
 
@@ -16,35 +17,156 @@ app.use(express.json({ limit: "15mb" }));
 const GLOBAL_KILL_SWITCH = false;
 
 const prototypeDevices = [
-   // DANIELE
+  // DANIELE
   {
     deviceId: "9640400020f1bae8",
     partner: "daniele",
     enabled: true,
     expiresAt: "2026-05-15T23:59:59Z"
   },
-   {
+  {
     deviceId: "9f906445f1ce5aa1",
     partner: "daniele-release",
     enabled: true,
     expiresAt: "2026-05-15T23:59:59Z"
   },
-  // YOWAY
-{
-  deviceId: "...",
-  partner: "yoway",
-  enabled: true, 
-  expiresAt: "2026-05-20T23:59:59Z"
-},
 
-// STANHOM
-{
-  deviceId: "...",
-  partner: "stanhom",
-  enabled: true,
-  expiresAt: "2026-05-20T23:59:59Z"
-}
+  // YOWAY
+  {
+    deviceId: "...",
+    partner: "yoway",
+    enabled: true,
+    expiresAt: "2026-05-20T23:59:59Z"
+  },
+
+  // STANHOM
+  {
+    deviceId: "...",
+    partner: "stanhom",
+    enabled: true,
+    expiresAt: "2026-05-20T23:59:59Z"
+  }
 ];
+
+function getAuthorizedDevice(deviceId) {
+  if (GLOBAL_KILL_SWITCH) {
+    return {
+      ok: false,
+      killSwitch: true,
+      reason: "Prototype temporarily disabled.",
+      expiresAt: null
+    };
+  }
+
+  if (!deviceId) {
+    return {
+      ok: false,
+      killSwitch: false,
+      reason: "Missing device ID.",
+      expiresAt: null
+    };
+  }
+
+  const device = prototypeDevices.find(d => d.deviceId === deviceId);
+
+  if (!device || !device.enabled) {
+    return {
+      ok: false,
+      killSwitch: false,
+      reason: "This prototype is not authorized for this device.",
+      expiresAt: null
+    };
+  }
+
+  const now = new Date();
+  const expiry = new Date(device.expiresAt);
+
+  if (Number.isNaN(expiry.getTime())) {
+    return {
+      ok: false,
+      killSwitch: false,
+      reason: "Invalid expiry configuration.",
+      expiresAt: null
+    };
+  }
+
+  if (now > expiry) {
+    return {
+      ok: false,
+      killSwitch: false,
+      reason: "Prototype access expired.",
+      expiresAt: device.expiresAt
+    };
+  }
+
+  return {
+    ok: true,
+    killSwitch: false,
+    device
+  };
+}
+
+function issuePrototypeToken(device) {
+  return jwt.sign(
+    {
+      deviceId: device.deviceId,
+      partner: device.partner
+    },
+    process.env.PROTOTYPE_JWT_SECRET,
+    {
+      expiresIn: "12h"
+    }
+  );
+}
+
+function requirePrototypeToken(req, res, next) {
+  try {
+    if (GLOBAL_KILL_SWITCH) {
+      return res.status(403).json({
+        error: "Prototype temporarily disabled.",
+        killSwitch: true
+      });
+    }
+
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+
+    if (!token) {
+      return res.status(401).json({
+        error: "Missing token."
+      });
+    }
+
+    if (!process.env.PROTOTYPE_JWT_SECRET) {
+      console.error("Missing PROTOTYPE_JWT_SECRET in environment variables.");
+      return res.status(500).json({
+        error: "Server configuration error."
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.PROTOTYPE_JWT_SECRET);
+
+    const check = getAuthorizedDevice(decoded.deviceId);
+
+    if (!check.ok) {
+      return res.status(403).json({
+        error: check.reason,
+        killSwitch: check.killSwitch || false,
+        expiresAt: check.expiresAt || null
+      });
+    }
+
+    req.prototypeDevice = check.device;
+    req.prototypeToken = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({
+      error: "Invalid or expired token."
+    });
+  }
+}
 
 function isProbablyVisualQuestion(text = "") {
   const t = text.toLowerCase().trim();
@@ -112,64 +234,49 @@ app.post("/prototype/access-check", (req, res) => {
 
     console.log("ACCESS CHECK:", { deviceId, appVersion });
 
-    if (GLOBAL_KILL_SWITCH) {
-      const result = {
-        allowed: false,
-        killSwitch: true,
-        message: "Prototype temporarily disabled.",
-        expiresAt: null
-      };
-      console.log("ACCESS CHECK RESULT:", result);
-      return res.json(result);
-    }
-
-    if (!deviceId) {
-      const result = {
+    if (!process.env.PROTOTYPE_JWT_SECRET) {
+      console.error("Missing PROTOTYPE_JWT_SECRET in environment variables.");
+      return res.status(500).json({
         allowed: false,
         killSwitch: false,
-        message: "Missing device ID.",
+        message: "Server configuration error.",
         expiresAt: null
-      };
-      console.log("ACCESS CHECK RESULT:", result);
-      return res.json(result);
+      });
     }
 
-    const device = prototypeDevices.find(d => d.deviceId === deviceId);
+    const check = getAuthorizedDevice(deviceId);
 
-    if (!device || !device.enabled) {
+    if (!check.ok) {
       const result = {
         allowed: false,
-        killSwitch: false,
-        message: "This prototype is not authorized for this device.",
-        expiresAt: null
+        killSwitch: check.killSwitch || false,
+        message: check.reason,
+        expiresAt: check.expiresAt || null,
+        token: null
       };
+
       console.log("ACCESS CHECK RESULT:", result);
       return res.json(result);
     }
 
-    const now = new Date();
-    const expiry = new Date(device.expiresAt);
-
-    if (now > expiry) {
-      const result = {
-        allowed: false,
-        killSwitch: false,
-        message: "Prototype access expired.",
-        expiresAt: device.expiresAt
-      };
-      console.log("ACCESS CHECK RESULT:", result);
-      return res.json(result);
-    }
+    const token = issuePrototypeToken(check.device);
 
     const result = {
       allowed: true,
       killSwitch: false,
       message: "Access granted.",
-      expiresAt: device.expiresAt
+      expiresAt: check.device.expiresAt,
+      token
     };
-    console.log("ACCESS CHECK RESULT:", result);
-    return res.json(result);
 
+    console.log("ACCESS CHECK RESULT:", {
+      allowed: result.allowed,
+      killSwitch: result.killSwitch,
+      expiresAt: result.expiresAt,
+      partner: check.device.partner
+    });
+
+    return res.json(result);
   } catch (err) {
     console.error("ACCESS CHECK ERROR:", err);
     res.status(500).json({ error: String(err) });
@@ -179,7 +286,7 @@ app.post("/prototype/access-check", (req, res) => {
 // ===============================
 // SESSION
 // ===============================
-app.post("/session", async (_req, res) => {
+app.post("/session", requirePrototypeToken, async (_req, res) => {
   try {
     const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
@@ -289,9 +396,13 @@ A calm, elegant, emotionally intelligent feminine presence in the mirror.
 // ===============================
 // TTS
 // ===============================
-app.post("/tts", async (req, res) => {
+app.post("/tts", requirePrototypeToken, async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text } = req.body || {};
+
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: "Missing text." });
+    }
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream`,
@@ -326,9 +437,9 @@ app.post("/tts", async (req, res) => {
 // ===============================
 // VISION
 // ===============================
-app.post("/vision", async (req, res) => {
+app.post("/vision", requirePrototypeToken, async (req, res) => {
   try {
-    const { question, language, image_base64 } = req.body;
+    const { question, language, image_base64 } = req.body || {};
 
     if (!question || !image_base64) {
       return res.status(400).json({ error: "Missing question or image_base64" });
@@ -447,7 +558,7 @@ Keep it natural and speak as Refleksa.
 // ===============================
 // WEATHER
 // ===============================
-app.get("/weather", async (_req, res) => {
+app.get("/weather", requirePrototypeToken, async (_req, res) => {
   try {
     const city = "Reading";
 
@@ -477,7 +588,7 @@ app.get("/weather", async (_req, res) => {
 // ===============================
 // NEWS
 // ===============================
-app.get("/news", async (req, res) => {
+app.get("/news", requirePrototypeToken, async (req, res) => {
   try {
     const category = req.query.category || "general";
 
@@ -506,19 +617,21 @@ app.get("/news", async (req, res) => {
 // ===============================
 // TIME
 // ===============================
-app.get("/time", (_req, res) => {
+app.get("/time", requirePrototypeToken, (_req, res) => {
   const now = new Date();
 
   const optionsDate = {
     weekday: "long",
     year: "numeric",
     month: "long",
-    day: "numeric"
+    day: "numeric",
+    timeZone: "Europe/London"
   };
 
   const optionsTime = {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Europe/London"
   };
 
   const date = now.toLocaleDateString("en-GB", optionsDate);
