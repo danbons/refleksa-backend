@@ -91,52 +91,63 @@ app.post("/prototype/access-check", (req, res) => {
     console.log("ACCESS CHECK:", { deviceId, appVersion });
 
     if (GLOBAL_KILL_SWITCH) {
-      return res.json({
+      const result = {
         allowed: false,
         killSwitch: true,
         message: "Prototype temporarily disabled.",
         expiresAt: null
-      });
+      };
+      console.log("ACCESS CHECK RESULT:", result);
+      return res.json(result);
     }
 
     if (!deviceId) {
-      return res.json({
+      const result = {
         allowed: false,
         killSwitch: false,
         message: "Missing device ID.",
         expiresAt: null
-      });
+      };
+      console.log("ACCESS CHECK RESULT:", result);
+      return res.json(result);
     }
 
     const device = prototypeDevices.find(d => d.deviceId === deviceId);
 
     if (!device || !device.enabled) {
-      return res.json({
+      const result = {
         allowed: false,
         killSwitch: false,
         message: "This prototype is not authorized for this device.",
         expiresAt: null
-      });
+      };
+      console.log("ACCESS CHECK RESULT:", result);
+      return res.json(result);
     }
 
     const now = new Date();
     const expiry = new Date(device.expiresAt);
 
     if (now > expiry) {
-      return res.json({
+      const result = {
         allowed: false,
         killSwitch: false,
         message: "Prototype access expired.",
         expiresAt: device.expiresAt
-      });
+      };
+      console.log("ACCESS CHECK RESULT:", result);
+      return res.json(result);
     }
 
-    return res.json({
+    const result = {
       allowed: true,
       killSwitch: false,
       message: "Access granted.",
       expiresAt: device.expiresAt
-    });
+    };
+    console.log("ACCESS CHECK RESULT:", result);
+    return res.json(result);
+
   } catch (err) {
     console.error("ACCESS CHECK ERROR:", err);
     res.status(500).json({ error: String(err) });
