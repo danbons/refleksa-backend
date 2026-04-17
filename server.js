@@ -152,7 +152,7 @@ app.post("/session", async (_req, res) => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         session: {
@@ -232,7 +232,7 @@ A calm, elegant, emotionally intelligent feminine presence in the mirror.
 `.trim(),
           max_output_tokens: 60
         }
-      }),
+      })
     });
 
     const text = await response.text();
@@ -266,12 +266,12 @@ app.post("/tts", async (req, res) => {
         method: "POST",
         headers: {
           "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           text,
           model_id: "eleven_flash_v2_5"
-        }),
+        })
       }
     );
 
@@ -414,7 +414,7 @@ Keep it natural and speak as Refleksa.
 // ===============================
 // WEATHER
 // ===============================
-app.get("/weather", async (req, res) => {
+app.get("/weather", async (_req, res) => {
   try {
     const city = "Reading";
 
@@ -473,7 +473,7 @@ app.get("/news", async (req, res) => {
 // ===============================
 // TIME
 // ===============================
-app.get("/time", (req, res) => {
+app.get("/time", (_req, res) => {
   const now = new Date();
 
   const optionsDate = {
