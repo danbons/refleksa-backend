@@ -23,6 +23,12 @@ const prototypeDevices = [
     enabled: true,
     expiresAt: "2026-05-15T23:59:59Z"
   },
+   {
+    deviceId: "9f906445f1ce5aa1",
+    partner: "daniele-release",
+    enabled: true,
+    expiresAt: "2026-05-15T23:59:59Z"
+  },
   // YOWAY
 {
   deviceId: "...",
