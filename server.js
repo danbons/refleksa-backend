@@ -10,6 +10,20 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 
+// ===============================
+// PROTOTYPE PROTECTION
+// ===============================
+const GLOBAL_KILL_SWITCH = false;
+
+const prototypeDevices = [
+  {
+    deviceId: "9640400020f1bae8",
+    partner: "daniele",
+    enabled: true,
+    expiresAt: "2026-05-15T23:59:59Z"
+  }
+];
+
 function isProbablyVisualQuestion(text = "") {
   const t = text.toLowerCase().trim();
 
@@ -67,6 +81,71 @@ function isProbablyVisualQuestion(text = "") {
   return visualHints.some(h => t.includes(h));
 }
 
+// ===============================
+// ACCESS CHECK ROUTE
+// ===============================
+app.post("/prototype/access-check", (req, res) => {
+  try {
+    const { deviceId, appVersion } = req.body || {};
+
+    console.log("ACCESS CHECK:", { deviceId, appVersion });
+
+    if (GLOBAL_KILL_SWITCH) {
+      return res.json({
+        allowed: false,
+        killSwitch: true,
+        message: "Prototype temporarily disabled.",
+        expiresAt: null
+      });
+    }
+
+    if (!deviceId) {
+      return res.json({
+        allowed: false,
+        killSwitch: false,
+        message: "Missing device ID.",
+        expiresAt: null
+      });
+    }
+
+    const device = prototypeDevices.find(d => d.deviceId === deviceId);
+
+    if (!device || !device.enabled) {
+      return res.json({
+        allowed: false,
+        killSwitch: false,
+        message: "This prototype is not authorized for this device.",
+        expiresAt: null
+      });
+    }
+
+    const now = new Date();
+    const expiry = new Date(device.expiresAt);
+
+    if (now > expiry) {
+      return res.json({
+        allowed: false,
+        killSwitch: false,
+        message: "Prototype access expired.",
+        expiresAt: device.expiresAt
+      });
+    }
+
+    return res.json({
+      allowed: true,
+      killSwitch: false,
+      message: "Access granted.",
+      expiresAt: device.expiresAt
+    });
+  } catch (err) {
+    console.error("ACCESS CHECK ERROR:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ===============================
+// SESSION
+// ===============================
 app.post("/session", async (_req, res) => {
   try {
     const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
@@ -174,6 +253,9 @@ A calm, elegant, emotionally intelligent feminine presence in the mirror.
   }
 });
 
+// ===============================
+// TTS
+// ===============================
 app.post("/tts", async (req, res) => {
   try {
     const { text } = req.body;
@@ -208,6 +290,9 @@ app.post("/tts", async (req, res) => {
   }
 });
 
+// ===============================
+// VISION
+// ===============================
 app.post("/vision", async (req, res) => {
   try {
     const { question, language, image_base64 } = req.body;
@@ -326,6 +411,9 @@ Keep it natural and speak as Refleksa.
   }
 });
 
+// ===============================
+// WEATHER
+// ===============================
 app.get("/weather", async (req, res) => {
   try {
     const city = "Reading";
@@ -353,6 +441,9 @@ app.get("/weather", async (req, res) => {
   }
 });
 
+// ===============================
+// NEWS
+// ===============================
 app.get("/news", async (req, res) => {
   try {
     const category = req.query.category || "general";
@@ -379,6 +470,9 @@ app.get("/news", async (req, res) => {
   }
 });
 
+// ===============================
+// TIME
+// ===============================
 app.get("/time", (req, res) => {
   const now = new Date();
 
