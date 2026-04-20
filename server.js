@@ -22,13 +22,19 @@ const prototypeDevices = [
     deviceId: "9640400020f1bae8",
     partner: "daniele",
     enabled: true,
-    expiresAt: "2026-05-15T23:59:59Z"
+    expiresAt: "2099-05-15T23:59:59Z"
+  },
+  {
+    deviceId: "f5f802377bd3383c",
+    partner: "daniele-tablet",
+    enabled: true,
+    expiresAt: "2099-05-15T23:59:59Z"
   },
   {
     deviceId: "9f906445f1ce5aa1",
     partner: "daniele-release",
     enabled: true,
-    expiresAt: "2026-05-15T23:59:59Z"
+    expiresAt: "2099-05-15T23:59:59Z"
   },
 
   // YOWAY
