@@ -53,7 +53,7 @@ const prototypeDevices = [
 
   // STANHOM
   {
-    deviceId: "...",
+    deviceId: "fe9e7a8ee77bf3c0",
     partner: "stanhom",
     enabled: true,
     expiresAt: "2026-05-20T23:59:59Z"
