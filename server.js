@@ -37,6 +37,18 @@ const prototypeDevices = [
     expiresAt: "2099-05-15T23:59:59Z"
   },
   {
+    deviceId: "7091d964fbcfb13f",
+    partner: "rocky-tablet",
+    enabled: true,
+    expiresAt: "2099-05-15T23:59:59Z"
+  },
+  {
+    deviceId: "b8c91fe48785eb97",
+    partner: "rocky-mirror",
+    enabled: true,
+    expiresAt: "2099-05-15T23:59:59Z"
+  },
+  {
     deviceId: "9f906445f1ce5aa1",
     partner: "daniele-release",
     enabled: true,
