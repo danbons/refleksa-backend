@@ -12,12 +12,23 @@ app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 
 // ===============================
+// BASIC API LOGGING
+// ===============================
+app.use((req, res, next) => {
+  console.log("API CALL:", {
+    method: req.method,
+    path: req.path,
+    time: new Date().toISOString()
+  });
+  next();
+});
+
+// ===============================
 // PROTOTYPE PROTECTION
 // ===============================
 const GLOBAL_KILL_SWITCH = false;
 
 const prototypeDevices = [
-  // DANIELE
   {
     deviceId: "9640400020f1bae8",
     partner: "daniele",
@@ -31,10 +42,10 @@ const prototypeDevices = [
     expiresAt: "2099-05-15T23:59:59Z"
   },
   {
-  deviceId: "3769318236fd53df",
-  partner: "eric-chenhang",
-  enabled: true,
-  expiresAt: "2026-05-20T23:59:59Z"
+    deviceId: "3769318236fd53df",
+    partner: "eric-chenhang",
+    enabled: true,
+    expiresAt: "2026-05-20T23:59:59Z"
   },
   {
     deviceId: "f5f802377bd3383c",
@@ -202,7 +213,6 @@ function isProbablyVisualQuestion(text = "") {
   const t = text.toLowerCase().trim();
 
   const visualHints = [
-    // IT
     "come sto",
     "come mi vedi",
     "ti piace questo outfit",
@@ -221,7 +231,6 @@ function isProbablyVisualQuestion(text = "") {
     "com'è la luce",
     "come ti sembro",
 
-    // EN
     "how do i look",
     "what am i wearing",
     "do you like this outfit",
@@ -235,7 +244,6 @@ function isProbablyVisualQuestion(text = "") {
     "how do you see me",
     "how do i seem",
 
-    // ES
     "cómo me veo",
     "qué llevo puesto",
     "te gusta este outfit",
@@ -243,7 +251,6 @@ function isProbablyVisualQuestion(text = "") {
     "parezco cansado",
     "parezco cansada",
 
-    // FR
     "comment je suis",
     "comment je suis habillé",
     "tu aimes cette tenue",
@@ -262,7 +269,11 @@ app.post("/prototype/access-check", (req, res) => {
   try {
     const { deviceId, appVersion } = req.body || {};
 
-    console.log("ACCESS CHECK:", { deviceId, appVersion });
+    console.log("DEVICE ACCESS:", {
+      deviceId,
+      appVersion,
+      time: new Date().toISOString()
+    });
 
     if (!process.env.PROTOTYPE_JWT_SECRET) {
       console.error("Missing PROTOTYPE_JWT_SECRET in environment variables.");
@@ -303,7 +314,8 @@ app.post("/prototype/access-check", (req, res) => {
       allowed: result.allowed,
       killSwitch: result.killSwitch,
       expiresAt: result.expiresAt,
-      partner: check.device.partner
+      partner: check.device.partner,
+      deviceId: check.device.deviceId
     });
 
     return res.json(result);
@@ -316,8 +328,14 @@ app.post("/prototype/access-check", (req, res) => {
 // ===============================
 // SESSION
 // ===============================
-app.post("/session", requirePrototypeToken, async (_req, res) => {
+app.post("/session", requirePrototypeToken, async (req, res) => {
   try {
+    console.log("SESSION START:", {
+      device: req.prototypeDevice.deviceId,
+      partner: req.prototypeDevice.partner,
+      time: new Date().toISOString()
+    });
+
     const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
@@ -409,6 +427,7 @@ A calm, elegant, emotionally intelligent feminine presence in the mirror.
     const data = JSON.parse(text);
 
     if (!response.ok) {
+      console.error("SESSION OPENAI ERROR:", data);
       return res.status(response.status).json(data);
     }
 
@@ -433,6 +452,13 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
     if (!text || !String(text).trim()) {
       return res.status(400).json({ error: "Missing text." });
     }
+
+    console.log("TTS USED:", {
+      device: req.prototypeDevice.deviceId,
+      partner: req.prototypeDevice.partner,
+      textLength: String(text).length,
+      time: new Date().toISOString()
+    });
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream`,
@@ -470,6 +496,15 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
 app.post("/vision", requirePrototypeToken, async (req, res) => {
   try {
     const { question, language, image_base64 } = req.body || {};
+
+    console.log("VISION USED:", {
+      device: req.prototypeDevice.deviceId,
+      partner: req.prototypeDevice.partner,
+      question,
+      language,
+      hasImage: Boolean(image_base64),
+      time: new Date().toISOString()
+    });
 
     if (!question || !image_base64) {
       return res.status(400).json({ error: "Missing question or image_base64" });
