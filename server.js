@@ -57,7 +57,7 @@ const prototypeDevices = [
 
   // YOWAY
   {
-    deviceId: "248b1b70642ce079",
+    deviceId: "24d81876642c6d79",
     partner: "yoway",
     enabled: true,
     expiresAt: "2026-05-20T23:59:59Z"
