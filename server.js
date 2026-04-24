@@ -31,6 +31,12 @@ const prototypeDevices = [
     expiresAt: "2099-05-15T23:59:59Z"
   },
   {
+  deviceId: "3769318236fd53df",
+  partner: "eric-chenhang",
+  enabled: true,
+  expiresAt: "2026-05-20T23:59:59Z"
+  },
+  {
     deviceId: "f5f802377bd3383c",
     partner: "daniele-tablet",
     enabled: true,
