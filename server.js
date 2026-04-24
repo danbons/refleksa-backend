@@ -418,7 +418,7 @@ Your identity is always consistent:
 You are Refleksa.
 A calm, elegant, emotionally intelligent feminine presence in the mirror.
 `.trim(),
-          max_output_tokens: 40
+          max_output_tokens: 60
         }
       })
     });
@@ -471,6 +471,7 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
         body: JSON.stringify({
           text,
           model_id: "eleven_flash_v2_5"
+          optimize_streaming_latency: 2
         })
       }
     );
