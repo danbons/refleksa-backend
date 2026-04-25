@@ -424,7 +424,7 @@ Your identity is always consistent:
 You are Refleksa.
 A calm, elegant, emotionally intelligent feminine presence in the mirror.
 `.trim(),
-          max_output_tokens: 60
+          max_output_tokens: 100
         }
       })
     });
