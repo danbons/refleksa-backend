@@ -483,18 +483,20 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
     );
 
     if (!response.ok) {
-      const err = await response.text();
-      console.error("TTS ERROR:", err);
-      return res.status(500).send(err);
-    }
+  const err = await response.text();
+  console.error("TTS ERROR:", err);
+  return res.status(500).send(err);
+}
 
-    res.setHeader("Content-Type", "audio/mpeg");
-    const buffer = Buffer.from(await response.arrayBuffer());
-    res.send(buffer);
-  } catch (err) {
-    console.error("TTS ERROR:", err);
-    res.status(500).send("TTS error");
-  }
+res.setHeader("Content-Type", "audio/mpeg");
+
+// STREAMING REAL TIME
+response.body.pipe(res);
+
+} catch (err) {
+  console.error("TTS ERROR:", err);
+  res.status(500).send("TTS error");
+}
 });
 
 // ===============================
