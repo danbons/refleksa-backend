@@ -451,7 +451,7 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
         body: JSON.stringify({
           text,
           model_id: "eleven_flash_v2_5",
-          optimize_streaming_latency: 2
+          optimize_streaming_latency: 3
         })
       }
     );
