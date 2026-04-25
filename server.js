@@ -10,6 +10,12 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
+app.use(cors());
+app.use(express.json({ limit: "15mb" }));
+
+app.get("/", (_req, res) => {
+  res.send("Refleksa backend OK");
+});
 
 // ===============================
 // BASIC API LOGGING
