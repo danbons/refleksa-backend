@@ -103,6 +103,12 @@ const prototypeDevices = [
     enabled: true,
     expiresAt: "2026-05-20T23:59:59Z"
   },
+  {
+  deviceId: "0d3cc86c348b12a7",
+  partner: "yoway-kunal",
+  enabled: true,
+  expiresAt: "2026-05-20T23:59:59Z"
+},
 
   // STANHOM
   {
