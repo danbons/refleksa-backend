@@ -114,7 +114,7 @@ const prototypeDevices = [
   partner: "mues-tec-thorsten",
   enabled: true,
   expiresAt: "2026-05-20T23:59:59Z"
-  }
+  },
   {
     deviceId: "fe9e7a8ee77bf3c0",
     partner: "stanhom",
