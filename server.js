@@ -108,8 +108,14 @@ const prototypeDevices = [
   partner: "yoway-kunal",
   enabled: true,
   expiresAt: "2026-05-20T23:59:59Z"
-},
-
+  },
+  // MUES-TEC
+  {
+  deviceId: "8673cd50cea7b6e9",
+  partner: "mues-tec-thorsten",
+  enabled: true,
+  expiresAt: "2026-05-20T23:59:59Z"
+  }
   // STANHOM
   {
     deviceId: "fe9e7a8ee77bf3c0",
