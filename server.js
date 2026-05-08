@@ -437,7 +437,7 @@ Avoid:
 If the user asks to go home or standby:
 respond briefly and stop.
 `.trim(),
-          max_output_tokens: 100
+          max_output_tokens: 500
         }
       })
     });
