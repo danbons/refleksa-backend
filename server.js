@@ -392,7 +392,7 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
         session: {
           type: "realtime",
           model: "gpt-realtime",
-          output_modalities: ["audio"],
+          output_modalities: ["text"],
           instructions: `
 You are Refleksa.
 
