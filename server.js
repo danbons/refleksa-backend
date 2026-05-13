@@ -60,6 +60,12 @@ const prototypeDevices = [
   expiresAt: "2026-05-20T23:59:59Z"
   },
   {
+  deviceId: "433b7cdb349a7ad7",
+  partner: "eric-mirror",
+  enabled: true,
+  expiresAt: "2026-05-20T23:59:59Z"
+  },
+  {
   deviceId: "c4013b15a65a2b7d",
   partner: "rocky-new",
   enabled: true,
