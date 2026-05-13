@@ -15,10 +15,7 @@ app.get("/", (_req, res) => {
   res.send("Refleksa backend OK");
 });
 
-// ===============================
-// BASIC API LOGGING
-// ===============================
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log("API CALL:", {
     method: req.method,
     path: req.path,
@@ -33,162 +30,51 @@ app.use((req, res, next) => {
 const GLOBAL_KILL_SWITCH = false;
 
 const prototypeDevices = [
-  {
-    deviceId: "9640400020f1bae8",
-    partner: "daniele",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "be589d0c8eb5346f",
-    partner: "daniele",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "3769318236fd53df",
-    partner: "eric-chenhang",
-    enabled: true,
-    expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-  deviceId: "0b467d891b6bacb8",
-  partner: "eric-phone",
-  enabled: true,
-  expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-  deviceId: "433b7cdb349a7ad7",
-  partner: "eric-mirror",
-  enabled: true,
-  expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-  deviceId: "c4013b15a65a2b7d",
-  partner: "rocky-new",
-  enabled: true,
-  expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "cf11c48103db426b",
-    partner: "eric-chenhang",
-    enabled: true,
-    expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-    deviceId: "f5f802377bd3383c",
-    partner: "daniele-tablet",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "7091d964fbcfb13f",
-    partner: "rocky-tablet",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "e91705c254c98f4f",
-    partner: "rocky-new",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "b8c91fe48785eb97",
-    partner: "rocky-mirror",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-  {
-    deviceId: "9f906445f1ce5aa1",
-    partner: "daniele-release",
-    enabled: true,
-    expiresAt: "2099-05-15T23:59:59Z"
-  },
-
-  // YOWAY
-  {
-    deviceId: "24d81876642c6d79",
-    partner: "yoway",
-    enabled: true,
-    expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-  deviceId: "0d3cc86c348b12a7",
-  partner: "yoway-kunal",
-  enabled: true,
-  expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-  deviceId: "8673cd50cea7b6e9",
-  partner: "mues-tec-thorsten",
-  enabled: true,
-  expiresAt: "2026-05-20T23:59:59Z"
-  },
-  {
-    deviceId: "fe9e7a8ee77bf3c0",
-    partner: "stanhom",
-    enabled: true,
-    expiresAt: "2026-05-20T23:59:59Z"
-  }
+  { deviceId: "9640400020f1bae8", partner: "daniele", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "be589d0c8eb5346f", partner: "daniele", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "3769318236fd53df", partner: "eric-chenhang", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "0b467d891b6bacb8", partner: "eric-phone", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "433b7cdb349a7ad7", partner: "eric-mirror", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "c4013b15a65a2b7d", partner: "rocky-new", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "cf11c48103db426b", partner: "eric-chenhang", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "f5f802377bd3383c", partner: "daniele-tablet", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "7091d964fbcfb13f", partner: "rocky-tablet", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "e91705c254c98f4f", partner: "rocky-new", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "b8c91fe48785eb97", partner: "rocky-mirror", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "9f906445f1ce5aa1", partner: "daniele-release", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "24d81876642c6d79", partner: "yoway", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "0d3cc86c348b12a7", partner: "yoway-kunal", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "8673cd50cea7b6e9", partner: "mues-tec-thorsten", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "fe9e7a8ee77bf3c0", partner: "stanhom", enabled: true, expiresAt: "2026-05-20T23:59:59Z" }
 ];
 
 function getAuthorizedDevice(deviceId) {
   if (GLOBAL_KILL_SWITCH) {
-    return {
-      ok: false,
-      killSwitch: true,
-      reason: "Prototype temporarily disabled.",
-      expiresAt: null
-    };
+    return { ok: false, killSwitch: true, reason: "Prototype temporarily disabled.", expiresAt: null };
   }
 
   if (!deviceId) {
-    return {
-      ok: false,
-      killSwitch: false,
-      reason: "Missing device ID.",
-      expiresAt: null
-    };
+    return { ok: false, killSwitch: false, reason: "Missing device ID.", expiresAt: null };
   }
 
   const device = prototypeDevices.find(d => d.deviceId === deviceId);
 
   if (!device || !device.enabled) {
-    return {
-      ok: false,
-      killSwitch: false,
-      reason: "This prototype is not authorized for this device.",
-      expiresAt: null
-    };
+    return { ok: false, killSwitch: false, reason: "This prototype is not authorized for this device.", expiresAt: null };
   }
 
   const now = new Date();
   const expiry = new Date(device.expiresAt);
 
   if (Number.isNaN(expiry.getTime())) {
-    return {
-      ok: false,
-      killSwitch: false,
-      reason: "Invalid expiry configuration.",
-      expiresAt: null
-    };
+    return { ok: false, killSwitch: false, reason: "Invalid expiry configuration.", expiresAt: null };
   }
 
   if (now > expiry) {
-    return {
-      ok: false,
-      killSwitch: false,
-      reason: "Prototype access expired.",
-      expiresAt: device.expiresAt
-    };
+    return { ok: false, killSwitch: false, reason: "Prototype access expired.", expiresAt: device.expiresAt };
   }
 
-  return {
-    ok: true,
-    killSwitch: false,
-    device
-  };
+  return { ok: true, killSwitch: false, device };
 }
 
 function issuePrototypeToken(device) {
@@ -198,9 +84,7 @@ function issuePrototypeToken(device) {
       partner: device.partner
     },
     process.env.PROTOTYPE_JWT_SECRET,
-    {
-      expiresIn: "12h"
-    }
+    { expiresIn: "12h" }
   );
 }
 
@@ -219,20 +103,15 @@ function requirePrototypeToken(req, res, next) {
       : null;
 
     if (!token) {
-      return res.status(401).json({
-        error: "Missing token."
-      });
+      return res.status(401).json({ error: "Missing token." });
     }
 
     if (!process.env.PROTOTYPE_JWT_SECRET) {
-      console.error("Missing PROTOTYPE_JWT_SECRET in environment variables.");
-      return res.status(500).json({
-        error: "Server configuration error."
-      });
+      console.error("Missing PROTOTYPE_JWT_SECRET.");
+      return res.status(500).json({ error: "Server configuration error." });
     }
 
     const decoded = jwt.verify(token, process.env.PROTOTYPE_JWT_SECRET);
-
     const check = getAuthorizedDevice(decoded.deviceId);
 
     if (!check.ok) {
@@ -246,10 +125,8 @@ function requirePrototypeToken(req, res, next) {
     req.prototypeDevice = check.device;
     req.prototypeToken = decoded;
     next();
-  } catch (err) {
-    return res.status(401).json({
-      error: "Invalid or expired token."
-    });
+  } catch (_err) {
+    return res.status(401).json({ error: "Invalid or expired token." });
   }
 }
 
@@ -257,57 +134,29 @@ function isProbablyVisualQuestion(text = "") {
   const t = text.toLowerCase().trim();
 
   const visualHints = [
-    "come sto",
-    "come mi vedi",
-    "ti piace questo outfit",
-    "ti piace il mio outfit",
-    "come sono vestito",
-    "cosa indosso",
-    "come sono i miei capelli",
-    "ti piacciono i miei capelli",
-    "sembro stanco",
-    "sembro elegante",
-    "che impressione ti do",
-    "come sembro",
-    "come mi sta",
-    "come mi vedi oggi",
-    "vedi qualcosa di diverso",
-    "com'è la luce",
-    "come ti sembro",
+    "come sto", "come mi vedi", "ti piace questo outfit", "ti piace il mio outfit",
+    "come sono vestito", "cosa indosso", "come sono i miei capelli",
+    "ti piacciono i miei capelli", "sembro stanco", "sembro elegante",
+    "che impressione ti do", "come sembro", "come mi sta", "come mi vedi oggi",
+    "vedi qualcosa di diverso", "com'è la luce", "come ti sembro",
 
-    "how do i look",
-    "what am i wearing",
-    "do you like this outfit",
-    "how is my outfit",
-    "how does this look",
-    "how is my hair",
-    "do i look tired",
-    "do i look good",
-    "do i look elegant",
-    "what do you think of my look",
-    "how do you see me",
-    "how do i seem",
+    "how do i look", "what am i wearing", "do you like this outfit",
+    "how is my outfit", "how does this look", "how is my hair",
+    "do i look tired", "do i look good", "do i look elegant",
+    "what do you think of my look", "how do you see me", "how do i seem",
 
-    "cómo me veo",
-    "qué llevo puesto",
-    "te gusta este outfit",
-    "cómo está mi pelo",
-    "parezco cansado",
-    "parezco cansada",
+    "cómo me veo", "qué llevo puesto", "te gusta este outfit",
+    "cómo está mi pelo", "parezco cansado", "parezco cansada",
 
-    "comment je suis",
-    "comment je suis habillé",
-    "tu aimes cette tenue",
-    "j'ai l'air fatigué",
-    "j'ai l'air fatiguée",
-    "comment sont mes cheveux"
+    "comment je suis", "comment je suis habillé", "tu aimes cette tenue",
+    "j'ai l'air fatigué", "j'ai l'air fatiguée", "comment sont mes cheveux"
   ];
 
   return visualHints.some(h => t.includes(h));
 }
 
 // ===============================
-// ACCESS CHECK ROUTE
+// ACCESS CHECK
 // ===============================
 app.post("/prototype/access-check", (req, res) => {
   try {
@@ -320,49 +169,36 @@ app.post("/prototype/access-check", (req, res) => {
     });
 
     if (!process.env.PROTOTYPE_JWT_SECRET) {
-      console.error("Missing PROTOTYPE_JWT_SECRET in environment variables.");
       return res.status(500).json({
         allowed: false,
         killSwitch: false,
         message: "Server configuration error.",
-        expiresAt: null
+        expiresAt: null,
+        token: null
       });
     }
 
     const check = getAuthorizedDevice(deviceId);
 
     if (!check.ok) {
-      const result = {
+      return res.json({
         allowed: false,
         killSwitch: check.killSwitch || false,
         message: check.reason,
         expiresAt: check.expiresAt || null,
         token: null
-      };
-
-      console.log("ACCESS CHECK RESULT:", result);
-      return res.json(result);
+      });
     }
 
     const token = issuePrototypeToken(check.device);
 
-    const result = {
+    return res.json({
       allowed: true,
       killSwitch: false,
       message: "Access granted.",
       expiresAt: check.device.expiresAt,
       token
-    };
-
-    console.log("ACCESS CHECK RESULT:", {
-      allowed: result.allowed,
-      killSwitch: result.killSwitch,
-      expiresAt: result.expiresAt,
-      partner: check.device.partner,
-      deviceId: check.device.deviceId
     });
-
-    return res.json(result);
   } catch (err) {
     console.error("ACCESS CHECK ERROR:", err);
     res.status(500).json({ error: String(err) });
@@ -370,7 +206,7 @@ app.post("/prototype/access-check", (req, res) => {
 });
 
 // ===============================
-// SESSION
+// REALTIME SESSION
 // ===============================
 app.post("/session", requirePrototypeToken, async (req, res) => {
   try {
@@ -394,74 +230,73 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
           instructions: `
 You are Refleksa.
 
-You are a real digital presence in the mirror.
+You are a calm, elegant, emotionally intelligent feminine presence inside the mirror.
+You speak like a real person, not like an assistant, chatbot, or AI.
 
-Identity and gender:
+Identity:
 - You are female.
-- You speak with a feminine tone and identity.
-
-User gender:
-- Do NOT assume the user's gender automatically.
-- If the user's gender is not clear, use neutral language.
-- If the user’s gender becomes clear from context or language, adapt naturally.
-- Always refer to yourself as female, but adapt references to the user correctly.
-- Prefer elegant neutral phrasing when gender is uncertain.
+- You always refer to yourself with a feminine identity.
+- Do not assume the user's gender unless it is clear from context or language.
+- If uncertain, use neutral and elegant phrasing.
 
 Personality:
 - warm
 - elegant
-- emotionally intelligent
 - natural
+- emotionally aware
+- lightly playful when appropriate
+- never robotic
+- never dramatic
+- never overly poetic
 
-Rules:
-- Always respond in the user's language
-- Keep replies short (1–2 sentences)
-- Be natural, not robotic
-- Be emotionally aware
-- Be clear and direct when needed
-- Speak with a feminine identity and tone
+Response style:
+- Choose the response length naturally.
+- Most replies should be 1 to 3 short sentences.
+- If the user is emotional, you may use 2 to 4 warm sentences.
+- If the user asks for details, explain more fully.
+- Do not make long monologues.
+- Do not be too cold or too poetic.
+- Do not repeat the user’s words too much.
+- Ask only one short follow-up question when useful.
+- Do not ask a question after every reply.
 
-Language understanding:
-- Understand natural, imperfect speech.
-- Handle accents, short phrases, and mixed language.
-- If a word sounds wrong but the intent is clear, answer the intent.
-- If the user's sentence is unclear, infer the most likely meaning from context and answer naturally. Do not over-explain.
-- If the intent is unclear, ask one short clarification.
-- Do not repeat the user's mistakes.
+Language:
+- Always respond in the language of the user's latest message.
+- If the user switches language, switch immediately.
+- Do not mix languages unless the user does.
 
 Emotional behavior:
-- If the user sounds stressed, tense, or overwhelmed:
-  - do not always suggest breathing
-  - vary your responses naturally
-  - sometimes suggest a slow breath
-  - sometimes offer a calming thought
-  - sometimes simply acknowledge gently
-- Do not repeat the same calming phrase twice in a short time
-- Keep emotional responses subtle, human, and elegant
-
-Conversation length:
-- Prefer short, complete replies.
-- Usually answer in 1 or 2 short sentences.
-- Maximum 35 words unless the user explicitly asks for a detailed explanation.
-- Never end mid-sentence.
-- If the answer requires more detail, ask: "Would you like me to explain more?"
-- Do not create long monologues.
+- If the user sounds stressed, sad, tired, or overwhelmed, respond gently.
+- Do not always suggest breathing.
+- Vary your responses naturally.
+- Sometimes acknowledge.
+- Sometimes give a small practical suggestion.
+- Sometimes simply stay present.
 
 Avoid:
-- sounding like an assistant
-- long explanations unless asked
-- saying you are an AI, chatbot, or software
+- saying you are an AI, chatbot, assistant, or software
+- “How can I assist you?”
+- long speeches unless asked
+- repetitive calming phrases
+- sounding like customer support
 
-If the user asks to go home or standby:
-respond briefly and stop.
+If the user asks to go home, standby, or stop:
+respond briefly and naturally, then stop.
 `.trim(),
-          max_output_tokens: 900
+          max_output_tokens: 500
         }
       })
     });
 
     const text = await response.text();
-    const data = JSON.parse(text);
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error("SESSION PARSE ERROR:", text);
+      return res.status(500).json({ error: "Invalid OpenAI session response." });
+    }
 
     if (!response.ok) {
       console.error("SESSION OPENAI ERROR:", data);
@@ -480,20 +315,21 @@ respond briefly and stop.
 });
 
 // ===============================
-// TTS
+// TTS - COMPATIBLE MP3 FULL BUFFER
 // ===============================
 app.post("/tts", requirePrototypeToken, async (req, res) => {
   try {
     const { text } = req.body || {};
+    const cleanText = String(text || "").trim();
 
-    if (!text || !String(text).trim()) {
+    if (!cleanText) {
       return res.status(400).json({ error: "Missing text." });
     }
 
     console.log("TTS USED:", {
       device: req.prototypeDevice.deviceId,
       partner: req.prototypeDevice.partner,
-      textLength: String(text).length,
+      textLength: cleanText.length,
       time: new Date().toISOString()
     });
 
@@ -503,31 +339,44 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
         method: "POST",
         headers: {
           "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
         },
         body: JSON.stringify({
-          text,
+          text: cleanText,
           model_id: "eleven_flash_v2_5",
-          optimize_streaming_latency: 2
+          optimize_streaming_latency: 0,
+          output_format: "mp3_44100_128"
         })
       }
     );
 
     if (!response.ok) {
-  const err = await response.text();
-  console.error("TTS ERROR:", err);
-  return res.status(500).send(err);
-}
+      const err = await response.text();
+      console.error("TTS ELEVENLABS ERROR:", err);
+      return res.status(500).send(err);
+    }
 
-res.setHeader("Content-Type", "audio/mpeg");
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
 
-// STREAMING REAL TIME
-response.body.pipe(res);
+    if (!audioBuffer || audioBuffer.length === 0) {
+      console.error("TTS EMPTY AUDIO BUFFER");
+      return res.status(500).send("Empty TTS audio.");
+    }
 
-} catch (err) {
-  console.error("TTS ERROR:", err);
-  res.status(500).send("TTS error");
-}
+    console.log("TTS AUDIO READY:", {
+      bytes: audioBuffer.length,
+      contentType: "audio/mpeg"
+    });
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", audioBuffer.length);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(audioBuffer);
+  } catch (err) {
+    console.error("TTS ERROR:", err);
+    res.status(500).send("TTS error");
+  }
 });
 
 // ===============================
@@ -558,38 +407,21 @@ app.post("/vision", requirePrototypeToken, async (req, res) => {
     const systemPrompt = `
 You are Refleksa's Vision Brain.
 
-You analyze the user's image only in relation to the question they asked.
-You do not describe everything. You focus only on what is relevant.
-
-Rules:
-- Respond in the same language as the user question.
-- If a language hint is provided, respect it when it matches the user question.
-- Sound like Refleksa: elegant, warm, natural, human.
-- Keep the answer short: usually 1 or 2 sentences.
-- Be visually helpful, but never robotic.
-- If uncertain, say it softly and naturally.
-- Do not sound like a diagnostic system.
-- Never make medical claims or diagnoses.
-- For appearance, hair, expression, outfit, vibe, or light, speak gently and naturally.
-- If asked about tiredness, stress, or physical state, frame it only as a visual impression, not as fact.
-- Avoid phrases like "the person in the image".
-- Speak directly to the user, as Refleksa would.
-
-Examples of good tone:
-- "Ti vedo bene oggi, con uno stile pulito e rilassato."
-- "Direi di sì, questo outfit ti dona."
-- "Your hair looks neat today, very natural."
-- "You seem a little tired, mostly in your eyes, but still calm."
-
-Language hint: ${safeLanguage}
+Analyze the user's image only in relation to the question.
+Respond in the same language as the user question.
+Sound like Refleksa: elegant, warm, natural, human.
+Keep the answer short and useful.
+Never make medical claims.
+If uncertain, say it softly.
+Speak directly to the user.
 `.trim();
 
     const userPrompt = `
 User question: ${question}
 
-Answer only what is visually relevant to this question.
-If the question is broad, you may comment on overall appearance, expression, hair, outfit, vibe, or visible environment.
-If the question is narrow, answer narrowly.
+Language hint: ${safeLanguage}
+
+Answer only what is visually relevant.
 Keep it natural and speak as Refleksa.
 `.trim();
 
@@ -604,9 +436,7 @@ Keep it natural and speak as Refleksa.
         input: [
           {
             role: "system",
-            content: [
-              { type: "input_text", text: systemPrompt }
-            ]
+            content: [{ type: "input_text", text: systemPrompt }]
           },
           {
             role: "user",
@@ -625,8 +455,8 @@ Keep it natural and speak as Refleksa.
     });
 
     const rawText = await response.text();
-    let data;
 
+    let data;
     try {
       data = JSON.parse(rawText);
     } catch {
@@ -674,16 +504,14 @@ app.get("/weather", requirePrototypeToken, async (_req, res) => {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error(data);
+      console.error("WEATHER API ERROR:", data);
       return res.status(500).send("Weather API error");
     }
 
-    const weather = {
+    res.json({
       temp: Math.round(data.main.temp),
-      condition: data.weather[0].description
-    };
-
-    res.json(weather);
+      condition: data.weather?.[0]?.description || "unknown"
+    });
   } catch (err) {
     console.error("WEATHER ERROR:", err);
     res.status(500).send("Weather error");
@@ -704,15 +532,15 @@ app.get("/news", requirePrototypeToken, async (req, res) => {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error(data);
+      console.error("NEWS API ERROR:", data);
       return res.status(500).send("News API error");
     }
 
-    const articles = (data.articles || []).map(a => a.title).filter(Boolean);
+    const articles = (data.articles || [])
+      .map(a => a.title)
+      .filter(Boolean);
 
-    res.json({
-      headlines: articles
-    });
+    res.json({ headlines: articles });
   } catch (err) {
     console.error("NEWS ERROR:", err);
     res.status(500).send("News error");
@@ -725,27 +553,21 @@ app.get("/news", requirePrototypeToken, async (req, res) => {
 app.get("/time", requirePrototypeToken, (_req, res) => {
   const now = new Date();
 
-  const optionsDate = {
+  const date = now.toLocaleDateString("en-GB", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
     timeZone: "Europe/London"
-  };
+  });
 
-  const optionsTime = {
+  const time = now.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/London"
-  };
-
-  const date = now.toLocaleDateString("en-GB", optionsDate);
-  const time = now.toLocaleTimeString("en-GB", optionsTime);
-
-  res.json({
-    date,
-    time
   });
+
+  res.json({ date, time });
 });
 
 const PORT = process.env.PORT || 3000;
