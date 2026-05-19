@@ -32,21 +32,13 @@ const GLOBAL_KILL_SWITCH = false;
 const prototypeDevices = [
   { deviceId: "9640400020f1bae8", partner: "daniele", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "be589d0c8eb5346f", partner: "daniele", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
-  { deviceId: "3769318236fd53df", partner: "eric-chenhang", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
-  { deviceId: "0b467d891b6bacb8", partner: "eric-phone", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
-  { deviceId: "433b7cdb349a7ad7", partner: "eric-mirror", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
-  { deviceId: "c4013b15a65a2b7d", partner: "rocky-new", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
-  { deviceId: "cf11c48103db426b", partner: "eric-chenhang", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
+  { deviceId: "9fcf35e5ff57e6a0", partner: "emily", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
   { deviceId: "f5f802377bd3383c", partner: "daniele-tablet", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
-  { deviceId: "7091d964fbcfb13f", partner: "rocky-tablet", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
-  { deviceId: "e91705c254c98f4f", partner: "rocky-new", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
-  { deviceId: "b8c91fe48785eb97", partner: "rocky-mirror", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "9f906445f1ce5aa1", partner: "daniele-release", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "24d81876642c6d79", partner: "yoway", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
   { deviceId: "0d3cc86c348b12a7", partner: "yoway-kunal", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
   { deviceId: "8673cd50cea7b6e9", partner: "mues-tec-thorsten", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
-  { deviceId: "fe9e7a8ee77bf3c0", partner: "stanhom", enabled: true, expiresAt: "2026-05-20T23:59:59Z" }
-];
+  ];
 
 function getAuthorizedDevice(deviceId) {
   if (GLOBAL_KILL_SWITCH) {
