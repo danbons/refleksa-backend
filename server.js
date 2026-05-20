@@ -35,6 +35,7 @@ const prototypeDevices = [
   { deviceId: "9fcf35e5ff57e6a0", partner: "emily", enabled: true, expiresAt: "2026-05-20T23:59:59Z" },
   { deviceId: "5094e5bf519799ef", partner: "VETO", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "8372493f1b15bff4", partner: "mirroh-ai", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "4f3370389e2315a6", partner: "mirroh-ai", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "c5da4126fa13ae83", partner: "rocky", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "f5f802377bd3383c", partner: "daniele-tablet", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "9f906445f1ce5aa1", partner: "daniele-release", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
