@@ -25,6 +25,22 @@ app.use((req, _res, next) => {
 });
 
 // ===============================
+// CLIENT DEBUG LOGS
+// ===============================
+app.post("/client-log", express.json({ limit: "1mb" }), (req, res) => {
+  console.log("CLIENT LOG:", {
+    deviceId: req.body.deviceId,
+    partner: req.body.partner,
+    level: req.body.level,
+    tag: req.body.tag,
+    message: req.body.message,
+    time: new Date().toISOString()
+  });
+
+  res.json({ ok: true });
+});
+
+// ===============================
 // PROTOTYPE PROTECTION
 // ===============================
 const GLOBAL_KILL_SWITCH = false;
