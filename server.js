@@ -50,6 +50,7 @@ const prototypeDevices = [
   { deviceId: "be589d0c8eb5346f", partner: "daniele", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "58cc2f1b34e996b6", partner: "mirroh-ai", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "8f2d451cfa6ff7a2", partner: "mirroh-ai", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "7d83688f63fde1da", partner: "danmirror", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "f5f802377bd3383c", partner: "daniele-tablet", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "9f906445f1ce5aa1", partner: "daniele-release", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "8673cd50cea7b6e9", partner: "mues-tec-thorsten", enabled: true, expiresAt: "2099-05-20T23:59:59Z" },
