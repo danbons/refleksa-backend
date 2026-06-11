@@ -551,6 +551,97 @@ app.get("/time", requirePrototypeToken, (_req, res) => {
   res.json({ date, time });
 });
 
+// ===============================
+// MEMORY ANALYZER
+// ===============================
+app.post("/memory/analyze", requirePrototypeToken, async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    const cleanText = String(text || "").trim();
+
+    if (!cleanText) {
+      return res.json({ should_save: false });
+    }
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
+        input: [
+          {
+            role: "system",
+            content: [{
+              type: "input_text",
+              text: `
+You are Refleksa's semantic memory filter.
+
+Decide if the user's message contains something worth remembering long term.
+
+Save only meaningful personal information:
+- preferences
+- dislikes
+- important people
+- hobbies
+- routines
+- emotional patterns
+- recurring worries
+- personal goals
+- favourite music, movies, actors, places, food
+- important life context
+
+Do NOT save:
+- casual greetings
+- temporary small talk
+- generic questions
+- commands
+- filler words
+- one-off irrelevant comments
+
+Return ONLY valid JSON:
+{
+  "should_save": true/false,
+  "category": "preference|person|routine|emotion|goal|hobby|health|other",
+  "importance": 1-10,
+  "memory": "short normalized memory in English"
+}
+              `.trim()
+            }]
+          },
+          {
+            role: "user",
+            content: [{
+              type: "input_text",
+              text: cleanText
+            }]
+          }
+        ],
+        max_output_tokens: 120
+      })
+    });
+
+    const raw = await response.text();
+    const data = JSON.parse(raw);
+
+    const output =
+      data.output_text ||
+      data.output?.flatMap(i => i.content || [])
+        ?.find(p => p.type === "output_text")?.text ||
+      "{}";
+
+    const parsed = JSON.parse(output);
+
+    return res.json(parsed);
+
+  } catch (err) {
+    console.error("MEMORY ANALYZE ERROR:", err);
+    return res.json({ should_save: false });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
