@@ -601,6 +601,22 @@ Do NOT save:
 - filler words
 - one-off irrelevant comments
 
+Importance guidelines:
+
+10 = spouse, children, family members, life-changing events, core identity
+
+9 = strongest passions, major life goals, deeply meaningful memories
+
+8 = favourite music, favourite singers, favourite actors, favourite movies, favourite hobbies, recurring passions
+
+7 = strong preferences and recurring interests
+
+6 = normal preferences and useful personal information
+
+5 = minor preferences and contextual information
+
+1-4 = generally not important enough to keep long term
+
 Return ONLY valid JSON:
 {
   "should_save": true/false,
