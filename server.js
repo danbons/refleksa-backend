@@ -582,6 +582,11 @@ app.post("/memory/analyze", requirePrototypeToken, async (req, res) => {
               text: `
 You are Refleksa's semantic memory filter.
 
+Current date is: ${new Date().toISOString().slice(0, 10)}
+
+When the user mentions a date without a year, infer the nearest future date based on the current date.
+Never infer a past year unless the user clearly talks about the past.
+
 Decide if the user's message contains something worth remembering long term.
 
 Save only meaningful personal information:
