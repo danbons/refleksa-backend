@@ -750,6 +750,26 @@ Rules:
 - Preserve privacy.
 - Preserve future follow-ups.
 
+You MUST always return an object with this exact shape:
+
+{
+  "consolidated": [
+    {
+      "text": "human consolidated memory in English",
+      "category": "preference|person|routine|emotion|goal|hobby|health|relationship|event|other",
+      "importance": 1-10,
+      "privacy": "normal|sensitive|surprise",
+      "date": null,
+      "follow_up_after": null,
+      "should_follow_up": false,
+      "people": []
+    }
+  ]
+}
+
+If memories are not strongly related, still return 1 to 3 useful consolidated memories summarizing the most meaningful facts.
+Never return an empty array unless all memories are trivial.
+
 Return ONLY valid JSON.
                 `.trim()
               }]
