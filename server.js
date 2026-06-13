@@ -707,6 +707,85 @@ Rules:
   }
 });
 
+// ===============================
+// MEMORY CONSOLIDATION
+// ===============================
+app.post("/memory/consolidate", requirePrototypeToken, async (req, res) => {
+  try {
+
+    const { memories } = req.body || {};
+
+    if (!Array.isArray(memories) || memories.length === 0) {
+      return res.json({ consolidated: [] });
+    }
+
+    const response = await fetch(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
+          input: [
+            {
+              role: "system",
+              content: [{
+                type: "input_text",
+                text: `
+You are Refleksa's Memory Consolidation Engine.
+
+Merge related memories into richer human memories.
+
+Rules:
+
+- Merge memories about the same people.
+- Merge memories about the same future event.
+- Merge memories about the same goal.
+- Merge memories about the same emotional pattern.
+- Do not invent facts.
+- Preserve important information.
+- Preserve privacy.
+- Preserve future follow-ups.
+
+Return ONLY valid JSON.
+                `.trim()
+              }]
+            },
+            {
+              role: "user",
+              content: [{
+                type: "input_text",
+                text: JSON.stringify(memories)
+              }]
+            }
+          ],
+          max_output_tokens: 500
+        })
+      }
+    );
+
+    const raw = await response.text();
+    const data = JSON.parse(raw);
+
+    const output =
+      data.output_text ||
+      data.output?.flatMap(i => i.content || [])
+        ?.find(p => p.type === "output_text")?.text ||
+      '{"consolidated":[]}';
+
+    return res.send(output);
+
+  } catch (err) {
+    console.error("MEMORY CONSOLIDATION ERROR:", err);
+    return res.json({
+      consolidated: []
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
