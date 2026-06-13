@@ -768,7 +768,10 @@ You MUST always return an object with this exact shape:
 }
 
 If memories are not strongly related, still return 1 to 3 useful consolidated memories summarizing the most meaningful facts.
-Never return an empty array unless all memories are trivial.
+
+Never return an empty consolidated array when at least one input memory has importance >= 5.
+If there are memories with importance >= 5, you MUST return at least one consolidated memory.
+The input memories are already filtered and considered meaningful. Your task is not to decide whether to keep them, but to consolidate them.
 
 Return ONLY valid JSON.
                 `.trim()
