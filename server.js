@@ -623,10 +623,26 @@ Importance guidelines:
 Return ONLY valid JSON:
 {
   "should_save": true/false,
-  "category": "preference|person|routine|emotion|goal|hobby|health|other",
+  "category": "preference|person|routine|emotion|goal|hobby|health|relationship|event|other",
   "importance": 1-10,
-  "memory": "short normalized memory in English"
+  "memory": "short normalized memory in English",
+  "privacy": "normal|sensitive|surprise",
+  "date": null or "yyyy-MM-dd",
+  "follow_up_after": null or "yyyy-MM-dd",
+  "should_follow_up": true/false,
+  "people": ["name1", "name2"]
 }
+
+Rules:
+- Use privacy "normal" for ordinary preferences and harmless facts.
+- Use privacy "sensitive" for emotional, health, personal or delicate information.
+- Use privacy "surprise" if the user mentions a gift, surprise, secret plan, birthday preparation, or something that should not be revealed.
+- If the user mentions a future event with a clear date, set date as yyyy-MM-dd.
+- If the user mentions tomorrow, infer tomorrow from today's real date.
+- If the memory is about an event, birthday, appointment, celebration, travel, meeting or important future moment, set should_follow_up true.
+- follow_up_after should usually be the day after the event.
+- people should include names clearly mentioned by the user.
+- If no date is clear, use null.
               `.trim()
             }]
           },
@@ -638,7 +654,7 @@ Return ONLY valid JSON:
             }]
           }
         ],
-        max_output_tokens: 120
+        max_output_tokens: 250
       })
     });
 
