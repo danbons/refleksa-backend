@@ -749,6 +749,13 @@ Rules:
 - Preserve important information.
 - Preserve privacy.
 - Preserve future follow-ups.
+- Do not merge memories about different people unless the input clearly says they are part of the same event.
+
+- If a memory mentions Greta and another memory mentions mother, Esther, Samantha, China, or another person, keep them separate unless the same sentence explicitly connects them.
+
+- Prefer multiple smaller accurate consolidated memories over one large mixed memory.
+
+- When people names are uncertain due to transcription errors, do not merge them with unrelated memories.
 
 You MUST always return an object with this exact shape:
 
