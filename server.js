@@ -776,7 +776,27 @@ Return ONLY valid JSON.
         ?.find(p => p.type === "output_text")?.text ||
       '{"consolidated":[]}';
 
-    return res.send(output);
+    let parsedOutput;
+
+try {
+  parsedOutput = JSON.parse(output);
+} catch {
+  parsedOutput = { consolidated: [] };
+}
+
+if (Array.isArray(parsedOutput)) {
+  parsedOutput = {
+    consolidated: parsedOutput
+  };
+}
+
+if (!parsedOutput.consolidated) {
+  parsedOutput = {
+    consolidated: []
+  };
+}
+
+return res.json(parsedOutput);
 
   } catch (err) {
     console.error("MEMORY CONSOLIDATION ERROR:", err);
