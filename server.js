@@ -620,6 +620,31 @@ Importance guidelines:
 
 1-4 = generally not important enough to keep long term
 
+Temporal memory rules:
+
+- If the user mentions a future event, trip, meeting, birthday, celebration, surprise, appointment, visit, holiday or important plan, consider it an event memory.
+
+- If the user says "next week", "la prossima settimana", "settimana prossima", "next month", "il mese prossimo", or equivalent, set:
+  "should_follow_up": true
+
+  even if no exact date is available.
+
+- If the user provides an exact date, populate:
+  "date": "yyyy-MM-dd"
+
+- If a future event should be followed up naturally, set:
+  "should_follow_up": true
+
+- If possible, set:
+  "follow_up_after"
+  as the day after the event.
+
+- If no exact date can be determined, leave:
+  "date": null
+
+  but still use:
+  "should_follow_up": true
+
 Return ONLY valid JSON:
 {
   "should_save": true/false,
