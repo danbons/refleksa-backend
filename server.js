@@ -764,6 +764,10 @@ Important:
 - Do not invent a name if uncertain.
 - If confidence is below 0.75 for name registration, use intent "unclear_name".
 - If it is normal conversation, use intent "normal".
+Never return action=remove unless the user explicitly asks
+to remove, delete, forget or cancel a person.
+
+Normal conversation must always return intent=normal.
 
 Known people:
 ${JSON.stringify(knownPeople || [])}
