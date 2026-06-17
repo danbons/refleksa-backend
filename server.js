@@ -708,6 +708,123 @@ Rules:
 });
 
 // ===============================
+// IDENTITY / PEOPLE ANALYZER
+// ===============================
+app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
+  try {
+    const { text, hasIdentity, knownPeople } = req.body || {};
+    const cleanText = String(text || "").trim();
+
+    if (!cleanText) {
+      return res.json({
+        intent: "normal",
+        language: "unknown",
+        name: null,
+        oldName: null,
+        newName: null,
+        adminAction: null,
+        confidence: 0,
+        reply: null
+      });
+    }
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
+        input: [
+          {
+            role: "system",
+            content: [{
+              type: "input_text",
+              text: `
+You are Refleksa's multilingual Identity and People command analyzer.
+
+Analyze the user's transcript, even if it contains speech recognition mistakes.
+
+Your job:
+1. Detect the language.
+2. Detect if the user is trying to say their name.
+3. Extract the most likely person name.
+4. Detect people admin commands:
+   - list known people
+   - remove/delete person
+   - rename person
+5. Return a natural reply in the same language as the user.
+
+Important:
+- Be tolerant of pronunciation/transcription mistakes.
+- Example: "ma numes Crina" probably means Romanian "mă numesc Crina".
+- Example: "mi amo Daniele" may mean Italian "mi chiamo Daniele".
+- Example: "my nam is John" means "my name is John".
+- Do not invent a name if uncertain.
+- If confidence is below 0.75 for name registration, use intent "unclear_name".
+- If it is normal conversation, use intent "normal".
+
+Known people:
+${JSON.stringify(knownPeople || [])}
+
+Mirror already has owner identity: ${Boolean(hasIdentity)}
+
+Return ONLY valid JSON:
+{
+  "intent": "register_name|unclear_name|people_admin|normal",
+  "language": "it|en|ro|es|fr|de|pt|pl|hu|bg|zh|ar|unknown",
+  "name": null or "Name",
+  "oldName": null or "OldName",
+  "newName": null or "NewName",
+  "adminAction": null or "list|remove|rename",
+  "confidence": 0.0,
+  "reply": null or "natural reply in the user's language"
+}
+              `.trim()
+            }]
+          },
+          {
+            role: "user",
+            content: [{
+              type: "input_text",
+              text: cleanText
+            }]
+          }
+        ],
+        max_output_tokens: 220
+      })
+    });
+
+    const raw = await response.text();
+    const data = JSON.parse(raw);
+
+    const output =
+      data.output_text ||
+      data.output?.flatMap(i => i.content || [])
+        ?.find(p => p.type === "output_text")?.text ||
+      "{}";
+
+    const parsed = JSON.parse(output);
+
+    return res.json(parsed);
+
+  } catch (err) {
+    console.error("IDENTITY ANALYZE ERROR:", err);
+    return res.json({
+      intent: "normal",
+      language: "unknown",
+      name: null,
+      oldName: null,
+      newName: null,
+      adminAction: null,
+      confidence: 0,
+      reply: null
+    });
+  }
+});
+
+// ===============================
 // MEMORY CONSOLIDATION
 // ===============================
 app.post("/memory/consolidate", requirePrototypeToken, async (req, res) => {
