@@ -712,7 +712,7 @@ Rules:
 // ===============================
 app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
   try {
-    const { text, hasIdentity, knownPeople } = req.body || {};
+    const { text, hasIdentity, knownPeople, faceDetected, recognizedPerson } = req.body || {};
     const cleanText = String(text || "").trim();
 
     if (!cleanText) {
@@ -773,6 +773,28 @@ Known people:
 ${JSON.stringify(knownPeople || [])}
 
 Mirror already has owner identity: ${Boolean(hasIdentity)}
+
+Face detected: ${Boolean(faceDetected)}
+Recognized person from face recognition: ${recognizedPerson || "unknown"}
+
+If faceDetected is true and recognizedPerson is null/unknown, treat the person as visually unknown.
+If the user speaks normally but the face is unknown, politely ask their name in the same language as the user.
+Examples:
+Italian: "Non credo di conoscerti ancora. Come ti chiami?"
+English: "I don’t think I know you yet. What’s your name?"
+Romanian: "Nu cred că te cunosc încă. Cum te cheamă?"
+
+If the unknown person says their name in any language, return intent="register_name".
+For Romanian, accept phrases like:
+- "mă numesc Crina"
+- "sunt Crina"
+- "eu sunt Crina"
+- "numele meu este Crina"
+
+For identity registration replies:
+Italian: "Piacere, Daniele. Ho registrato il tuo nome."
+English: "Nice to meet you, John. I’ve registered your name."
+Romanian: "Încântată, Crina. Ți-am înregistrat numele."
 
 Return ONLY valid JSON:
 {
