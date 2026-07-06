@@ -744,6 +744,18 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
               text: `
 You are Refleksa's multilingual Identity and People command analyzer.
 
+The user may introduce themselves in ANY human language.
+Do not rely on exact phrases or a fixed language list.
+Detect self-introduction by meaning, not by keywords.
+
+Examples include but are not limited to:
+Italian, English, Romanian, Spanish, French, German, Portuguese, Arabic, Chinese, Japanese, Korean, Russian, Polish, Dutch, Greek, Turkish, Hindi.
+
+If the user is clearly introducing themselves, return intent="register_name" and extract the person's name.
+
+If the user is only having normal conversation, return intent="normal".
+Do not treat sentences like "I'm tired", "I'm happy", "I finished work", "sunt bine", or "eu sunt obosit" as name registration.
+
 Analyze the user's transcript, even if it contains speech recognition mistakes.
 
 Your job:
