@@ -475,6 +475,125 @@ Keep it natural and speak as Refleksa.
 });
 
 // ===============================
+// VISION KNOWLEDGE
+// ===============================
+app.post("/vision/knowledge", requirePrototypeToken, async (req, res) => {
+  try {
+    const { image_base64, recognizedPerson } = req.body || {};
+
+    if (!image_base64) {
+      return res.status(400).json({ error: "Missing image_base64" });
+    }
+
+    const dataUrl = image_base64.startsWith("data:image/")
+      ? image_base64
+      : `data:image/jpeg;base64,${image_base64}`;
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini",
+        input: [
+          {
+            role: "system",
+            content: [{
+              type: "input_text",
+              text: `
+You are Refleksa's Vision Knowledge Engine.
+
+Analyze the image and extract ONLY useful object-location knowledge.
+
+Return ONLY valid JSON.
+
+Do NOT describe the image.
+Do NOT return people faces, identity, appearance, clothing, emotions or body details.
+Do NOT save sensitive information.
+Do NOT save walls, floors, ceilings, doors, generic furniture unless useful as a location.
+Do NOT invent objects that are not clearly visible.
+
+Focus only on practical objects the user may later ask about:
+phone, keys, wallet, glasses, remote control, laptop, tablet, book, bag, backpack, documents, bottle, cup, mug, charger, headphones, watch.
+
+Return max 5 items.
+
+Each item must be:
+{
+  "object": "normalized English object name",
+  "location": "short English location, e.g. sofa, table, desk, bed, countertop",
+  "room": null or "kitchen|living room|bedroom|bathroom|office|unknown",
+  "confidence": 0.0
+}
+
+If nothing useful is visible, return:
+{
+  "items": []
+}
+
+JSON shape:
+{
+  "items": []
+}
+`.trim()
+            }]
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `Recognized person: ${recognizedPerson || "unknown"}`
+              },
+              {
+                type: "input_image",
+                image_url: dataUrl,
+                detail: "low"
+              }
+            ]
+          }
+        ],
+        max_output_tokens: 300
+      })
+    });
+
+    const raw = await response.text();
+    const data = JSON.parse(raw);
+
+    if (!response.ok) {
+      console.error("VISION KNOWLEDGE ERROR:", data);
+      return res.status(response.status).json(data);
+    }
+
+    const output =
+      data.output_text ||
+      data.output?.flatMap(item => item.content || [])
+        ?.find(part => part.type === "output_text")
+        ?.text ||
+      '{"items":[]}';
+
+    let parsed;
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      parsed = { items: [] };
+    }
+
+    if (!Array.isArray(parsed.items)) {
+      parsed.items = [];
+    }
+
+    return res.json(parsed);
+
+  } catch (err) {
+    console.error("VISION KNOWLEDGE ERROR:", err);
+    return res.json({ items: [] });
+  }
+});
+
+// ===============================
 // WEATHER
 // ===============================
 app.get("/weather", requirePrototypeToken, async (_req, res) => {
