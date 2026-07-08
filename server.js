@@ -726,6 +726,129 @@ Rules:
 });
 
 // ===============================
+// KNOWLEDGE ANALYZER
+// ===============================
+app.post("/knowledge/analyze", requirePrototypeToken, async (req, res) => {
+    try {
+
+        const {
+            text,
+            language,
+            recognizedPerson
+        } = req.body || {};
+
+        const cleanText = String(text || "").trim();
+
+        if (!cleanText) {
+            return res.json({
+                intent: "none"
+            });
+        }
+
+        const response = await fetch("https://api.openai.com/v1/responses", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+
+                model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
+
+                input: [
+
+                    {
+                        role: "system",
+                        content: [{
+                            type: "input_text",
+                            text: `
+You are Refleksa's Knowledge Analyzer.
+
+Your job is to understand whether the user is:
+
+- saving the location of an object
+- asking where an object is
+- describing the environment
+- mentioning an object
+- or simply having a normal conversation.
+
+Always understand the meaning.
+
+Never rely on exact keywords.
+
+Support ALL languages.
+
+Examples:
+
+"Remember my keys are on the table."
+
+"Ricordati che le chiavi sono sul tavolo."
+
+"Le mie chiavi sono sul tavolo."
+
+"Unde sunt cheile?"
+
+"Where are my keys?"
+
+"Dove sono le chiavi?"
+
+Return ONLY JSON.
+
+{
+  "intent":"none|save_object|find_object|environment",
+
+  "object":null,
+
+  "location":null,
+
+  "room":null,
+
+  "confidence":0.0
+}
+`.trim()
+                        }]
+                    },
+
+                    {
+                        role: "user",
+                        content: [{
+                            type: "input_text",
+                            text: cleanText
+                        }]
+                    }
+
+                ],
+
+                max_output_tokens:150
+
+            })
+        });
+
+        const raw = await response.text();
+
+        const data = JSON.parse(raw);
+
+        const output =
+            data.output_text ||
+            data.output?.flatMap(i => i.content || [])
+                ?.find(p => p.type === "output_text")?.text ||
+            "{}";
+
+        return res.json(JSON.parse(output));
+
+    } catch(err){
+
+        console.error("KNOWLEDGE ANALYZE ERROR:", err);
+
+        return res.json({
+            intent:"none"
+        });
+
+    }
+});
+
+
+// ===============================
 // IDENTITY / PEOPLE ANALYZER
 // ===============================
 app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
