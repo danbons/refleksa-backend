@@ -515,8 +515,16 @@ Do NOT save sensitive information.
 Do NOT save walls, floors, ceilings, doors, generic furniture unless useful as a location.
 Do NOT invent objects that are not clearly visible.
 
-Focus only on practical objects the user may later ask about:
-phone, keys, wallet, glasses, remote control, laptop, tablet, book, bag, backpack, documents, bottle, cup, mug, charger, headphones, watch.
+Save ONLY small or movable personal objects that a user may later look for.
+
+Allowed examples:
+phone, keys, wallet, glasses, remote control, laptop, tablet, book, bag, backpack, documents, passport, bottle, cup, mug, coffee mug, charger, headphones, watch.
+
+Do NOT save fixed room objects or furniture as objects.
+Ignore:
+walls, floors, ceilings, doors, windows, plants, flowers, vases, refrigerator, fridge, oven, sink, toilet, cabinets, drawers, shelves, table, desk, chair, sofa, bed, countertop, mirror.
+
+Furniture can be used ONLY as a location, never as the saved object.
 
 Return max 5 items.
 
