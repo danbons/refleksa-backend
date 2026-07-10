@@ -1260,6 +1260,486 @@ Use this exact structure:
 });
 
 // ===============================
+// UNIFIED ROUTER
+// COMMAND + KNOWLEDGE
+// ===============================
+app.post("/route/analyze", requirePrototypeToken, async (req, res) => {
+  const emptyResult = {
+    route: "normal",
+    action: "none",
+    knowledgeIntent: "none",
+    language: "unknown",
+    parameters: {
+      name: null,
+      oldName: null,
+      newName: null,
+      title: null,
+      date: null,
+      time: null,
+      object: null,
+      location: null,
+      room: null
+    },
+    confidence: 0
+  };
+
+  try {
+    const {
+      text,
+      knownPeople,
+      currentPerson
+    } = req.body || {};
+
+    const cleanText = String(text || "").trim();
+
+    if (!cleanText) {
+      return res.json(emptyResult);
+    }
+
+    const people = Array.isArray(knownPeople)
+      ? knownPeople
+          .map(person => String(person || "").trim())
+          .filter(Boolean)
+      : [];
+
+    const response = await fetch(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model:
+            process.env.OPENAI_ROUTER_MODEL ||
+            process.env.OPENAI_COMMAND_MODEL ||
+            process.env.OPENAI_MEMORY_MODEL ||
+            "gpt-4.1-mini",
+
+          input: [
+            {
+              role: "system",
+              content: [{
+                type: "input_text",
+                text: `
+You are Refleksa's fast multilingual Unified Router.
+
+Analyze the user's latest transcript once and classify it into exactly one route:
+
+- normal
+- command
+- knowledge
+
+Your output is used by an Android smart mirror.
+
+Support every language understood by the model.
+
+The transcript may contain:
+- speech-recognition mistakes
+- incomplete words
+- phonetic spelling
+- repeated fragments
+- malformed grammar
+- accents
+- incorrect punctuation
+
+Understand meaning semantically.
+Do not rely only on exact keywords.
+Do not invent actions, objects, names or locations.
+
+CURRENT CONTEXT
+
+Known registered people:
+${JSON.stringify(people)}
+
+Current recognized person:
+${currentPerson || "unknown"}
+
+==================================================
+ROUTE: COMMAND
+==================================================
+
+Use route "command" only when the user clearly requests an executable action.
+
+SUPPORTED COMMAND ACTIONS
+
+PEOPLE:
+- list_people
+- delete_person
+- rename_person
+
+VOLUME:
+- volume_up
+- volume_down
+- volume_max
+- volume_mute
+- volume_normal
+
+APPS:
+- open_youtube
+- open_spotify
+- open_chrome
+- open_calendar
+- open_settings
+
+DEVICE:
+- standby
+- go_home
+- stop_speaking
+
+REMINDERS:
+- add_reminder
+- remove_reminder
+- clear_reminders
+- list_reminders
+
+TIME:
+- get_time
+- get_date
+
+COMMAND EXAMPLES
+
+list_people:
+- who do you know
+- which people do you know
+- do you know anyone
+- who is registered
+- anyone besides me
+- chi conosci
+- quali persone conosci
+- conosci qualcuno
+- conosci altre persone oltre a me
+- mi sai dire quali persone conosci
+- di persone chi conosci
+
+delete_person:
+- remove NAME
+- delete NAME
+- forget NAME
+- remove NAME from memory
+- rimuovi NAME
+- elimina NAME
+- cancella NAME
+- dimentica NAME
+- togli NAME dalle persone conosciute
+- rimuovi la persona NAME
+
+Tolerate likely transcription mistakes such as:
+- rimovi
+- remuovi
+- ti muovi la persona
+- rimuove persona
+
+NAME CORRECTION
+
+Use knownPeople to correct a name only when there is one obvious and unique close match.
+
+Example:
+
+Known people:
+["Daniele", "Krina"]
+
+Transcript:
+"Rimuovi Acrina"
+
+Correct result:
+parameters.name = "Krina"
+
+Do not correct when uncertain.
+
+For rename_person:
+- parameters.oldName = current registered name
+- parameters.newName = requested new name
+
+For reminders:
+- extract title, date and time only when clear
+- use yyyy-MM-dd for exact dates
+- use HH:mm for exact times
+- do not invent missing information
+
+For command route:
+- action must not be "none"
+- knowledgeIntent must be "none"
+
+==================================================
+ROUTE: KNOWLEDGE
+==================================================
+
+Use route "knowledge" only when the user:
+
+1. tells Refleksa where an object is
+2. asks where an object is
+
+SUPPORTED KNOWLEDGE INTENTS
+
+- save_object
+- find_object
+
+save_object examples:
+- Remember that my keys are on the table.
+- My phone is on the sofa.
+- Ricordati che il laptop è sul tavolo.
+- Le chiavi sono in cucina.
+- Telefonul meu este pe masă.
+
+find_object examples:
+- Where are my keys?
+- I cannot find my laptop.
+- Dove sono le chiavi?
+- Non trovo più il telefono.
+- Unde este laptopul meu?
+
+KNOWLEDGE RULES
+
+Normalize common object names into English.
+
+Examples:
+- smartphone
+- mobile phone
+- cell phone
+→ phone
+
+- coffee cup
+- tazza da caffè
+→ coffee mug
+
+For save_object:
+- parameters.object must contain the normalized object
+- parameters.location must contain the short location
+- parameters.room may be null or a short normalized room
+- action must be "none"
+- knowledgeIntent must be "save_object"
+
+For find_object:
+- parameters.object must contain the normalized object
+- parameters.location must be null
+- action must be "none"
+- knowledgeIntent must be "find_object"
+
+Do not classify a normal mention of an object as knowledge.
+
+Examples that are normal conversation:
+- I like my new laptop.
+- My phone is beautiful.
+- Sto usando il computer.
+- Ho comprato una tazza nuova.
+
+The user must clearly be saving or finding an object location.
+
+==================================================
+ROUTE: NORMAL
+==================================================
+
+Use route "normal" for:
+- greetings
+- feelings
+- opinions
+- jokes
+- casual conversation
+- ordinary questions
+- personal stories
+- health discussion
+- weather discussion
+- incomplete vague fragments
+
+Examples:
+- come stai
+- sono stanco
+- accaldato
+- buon pomeriggio
+- tell me a joke
+- I am drinking tea
+- ho mal di gola
+- mi sento bene oggi
+
+Vague fragments must remain normal unless the intended action is clear.
+
+Examples:
+- "volume" alone → normal
+- "YouTube" alone → normal
+- "people" alone → normal
+- "laptop" alone → normal
+
+For normal route:
+- action = "none"
+- knowledgeIntent = "none"
+
+==================================================
+OUTPUT
+==================================================
+
+Detect the language of the user's latest transcript.
+
+Return ONLY valid JSON using exactly this structure:
+
+{
+  "route": "normal|command|knowledge",
+  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+  "knowledgeIntent": "none|save_object|find_object",
+  "language": "BCP-47-style language code or unknown",
+  "parameters": {
+    "name": null,
+    "oldName": null,
+    "newName": null,
+    "title": null,
+    "date": null,
+    "time": null,
+    "object": null,
+    "location": null,
+    "room": null
+  },
+  "confidence": 0.0
+}
+                `.trim()
+              }]
+            },
+            {
+              role: "user",
+              content: [{
+                type: "input_text",
+                text: cleanText
+              }]
+            }
+          ],
+
+          max_output_tokens: 180
+        })
+      }
+    );
+
+    const raw = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      console.error("ROUTE OPENAI RESPONSE PARSE ERROR:", raw);
+      return res.json(emptyResult);
+    }
+
+    if (!response.ok) {
+      console.error("ROUTE OPENAI ERROR:", data);
+      return res.status(response.status).json(emptyResult);
+    }
+
+    const output =
+      data.output_text ||
+      data.output
+        ?.flatMap(item => item.content || [])
+        ?.find(part => part.type === "output_text")
+        ?.text ||
+      "{}";
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      console.error("ROUTE RESULT JSON ERROR:", output);
+      return res.json(emptyResult);
+    }
+
+    const validRoutes = new Set([
+      "normal",
+      "command",
+      "knowledge"
+    ]);
+
+    const validActions = new Set([
+      "none",
+      "list_people",
+      "delete_person",
+      "rename_person",
+      "volume_up",
+      "volume_down",
+      "volume_max",
+      "volume_mute",
+      "volume_normal",
+      "open_youtube",
+      "open_spotify",
+      "open_chrome",
+      "open_calendar",
+      "open_settings",
+      "standby",
+      "go_home",
+      "stop_speaking",
+      "add_reminder",
+      "remove_reminder",
+      "clear_reminders",
+      "list_reminders",
+      "get_time",
+      "get_date"
+    ]);
+
+    const validKnowledgeIntents = new Set([
+      "none",
+      "save_object",
+      "find_object"
+    ]);
+
+    let route = validRoutes.has(parsed.route)
+      ? parsed.route
+      : "normal";
+
+    let action = validActions.has(parsed.action)
+      ? parsed.action
+      : "none";
+
+    let knowledgeIntent =
+      validKnowledgeIntents.has(parsed.knowledgeIntent)
+        ? parsed.knowledgeIntent
+        : "none";
+
+    // Keep the result internally consistent.
+    if (route === "normal") {
+      action = "none";
+      knowledgeIntent = "none";
+    }
+
+    if (route === "command") {
+      knowledgeIntent = "none";
+
+      if (action === "none") {
+        route = "normal";
+      }
+    }
+
+    if (route === "knowledge") {
+      action = "none";
+
+      if (knowledgeIntent === "none") {
+        route = "normal";
+      }
+    }
+
+    return res.json({
+      route,
+      action,
+      knowledgeIntent,
+      language: parsed.language || "unknown",
+      parameters: {
+        name: parsed.parameters?.name || null,
+        oldName: parsed.parameters?.oldName || null,
+        newName: parsed.parameters?.newName || null,
+        title: parsed.parameters?.title || null,
+        date: parsed.parameters?.date || null,
+        time: parsed.parameters?.time || null,
+        object: parsed.parameters?.object || null,
+        location: parsed.parameters?.location || null,
+        room: parsed.parameters?.room || null
+      },
+      confidence: Number(parsed.confidence) || 0
+    });
+
+  } catch (err) {
+    console.error("ROUTE ANALYZE ERROR:", err);
+    return res.json(emptyResult);
+  }
+});
+
+// ===============================
 // COMMAND ENGINE
 // ===============================
 app.post("/command/analyze", requirePrototypeToken, async (req, res) => {
