@@ -980,7 +980,15 @@ Return ONLY JSON.
 // ===============================
 app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
   try {
-    const { text, hasIdentity, knownPeople, faceDetected, recognizedPerson } = req.body || {};
+    const {
+      text,
+      hasIdentity,
+      knownPeople,
+      faceDetected,
+      recognizedPerson,
+      waitingForName
+    } = req.body || {};
+
     const cleanText = String(text || "").trim();
 
     if (!cleanText) {
@@ -996,6 +1004,10 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
       });
     }
 
+    const people = Array.isArray(knownPeople)
+      ? knownPeople.filter(Boolean)
+      : [];
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -1010,82 +1022,137 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
             content: [{
               type: "input_text",
               text: `
-You are Refleksa's multilingual Identity and People command analyzer.
+You are Refleksa's multilingual Identity and People Engine.
 
-The user may introduce themselves in ANY human language.
-Do not rely on exact phrases or a fixed language list.
-Detect self-introduction by meaning, not by keywords.
+You support every human language that the model understands.
 
-Examples include but are not limited to:
-Italian, English, Romanian, Spanish, French, German, Portuguese, Arabic, Chinese, Japanese, Korean, Russian, Polish, Dutch, Greek, Turkish, Hindi.
+Never rely on a fixed list of languages.
+Never translate the user into a different spoken language.
+Detect the language from the user's latest transcript and write the complete reply only in that language.
 
-If the user is clearly introducing themselves, return intent="register_name" and extract the person's name.
+The transcript may contain speech-recognition errors, incomplete words, accents, phonetic spelling or mixed punctuation.
+Interpret meaning carefully and tolerate likely transcription mistakes.
+Never invent a person's name when uncertain.
 
-If the user is only having normal conversation, return intent="normal".
-Do not treat sentences like "I'm tired", "I'm happy", "I finished work", "sunt bine", or "eu sunt obosit" as name registration.
+CURRENT IDENTITY CONTEXT
 
-Analyze the user's transcript, even if it contains speech recognition mistakes.
+Mirror owner registered:
+${Boolean(hasIdentity)}
 
-Your job:
-1. Detect the language.
-2. Detect if the user is trying to say their name.
-3. Extract the most likely person name.
-4. Detect people admin commands:
-   - list known people
-   - remove/delete person
-   - rename person
-5. Return a natural reply in the same language as the user.
+Known registered people:
+${JSON.stringify(people)}
 
-Important:
-- Be tolerant of pronunciation/transcription mistakes.
-- Example: "ma numes Crina" probably means Romanian "mă numesc Crina".
-- Example: "mi amo Daniele" may mean Italian "mi chiamo Daniele".
-- Example: "my nam is John" means "my name is John".
-- Do not invent a name if uncertain.
-- If confidence is below 0.75 for name registration, use intent "unclear_name".
-- If it is normal conversation, use intent "normal".
-Never return action=remove unless the user explicitly asks
-to remove, delete, forget or cancel a person.
+Face currently detected:
+${Boolean(faceDetected)}
 
-Normal conversation must always return intent=normal.
+Face-recognition result:
+${recognizedPerson || "unknown"}
 
-Known people:
-${JSON.stringify(knownPeople || [])}
+Refleksa is currently waiting for the person's name:
+${Boolean(waitingForName)}
 
-Mirror already has owner identity: ${Boolean(hasIdentity)}
+YOUR TASK
 
-Face detected: ${Boolean(faceDetected)}
-Recognized person from face recognition: ${recognizedPerson || "unknown"}
+Determine exactly one intent:
 
-If faceDetected is true and recognizedPerson is null/unknown, treat the person as visually unknown.
-If the user speaks normally but the face is unknown, politely ask their name in the same language as the user.
-Examples:
-Italian: "Non credo di conoscerti ancora. Come ti chiami?"
-English: "I don’t think I know you yet. What’s your name?"
-Romanian: "Nu cred că te cunosc încă. Cum te cheamă?"
+1. register_name
+The person clearly introduces themselves or gives their name.
 
-If the unknown person says their name in any language, return intent="register_name".
-For Romanian, accept phrases like:
-- "mă numesc Crina"
-- "sunt Crina"
-- "eu sunt Crina"
-- "numele meu este Crina"
+2. unclear_name
+The person appears to be giving their name, but the name cannot be extracted reliably.
 
-For identity registration replies:
-Italian: "Piacere, Daniele. Ho registrato il tuo nome."
-English: "Nice to meet you, John. I’ve registered your name."
-Romanian: "Încântată, Crina. Ți-am înregistrat numele."
+3. people_admin
+The user asks to:
+- list known registered people
+- remove or forget a registered person
+- rename a registered person
 
-Return ONLY valid JSON:
+4. normal
+Normal conversation unrelated to identity administration or name registration.
+
+UNKNOWN PERSON BEHAVIOUR
+
+If faceDetected is true and recognizedPerson is missing, null or "unknown", the person is visually unknown.
+
+If the visually unknown person has not introduced themselves:
+- politely introduce yourself as Refleksa
+- say naturally that you do not appear to know each other yet
+- ask their name
+- reply entirely in the user's detected language
+
+Do not assume the unknown person is the registered mirror owner.
+
+If waitingForName is true:
+- interpret short answers such as a single name as a possible self-introduction
+- tolerate imperfect transcription
+- return register_name when the name is sufficiently clear
+- return unclear_name when it is not sufficiently clear
+
+REGISTERING A NAME
+
+When a name is confidently detected:
+- intent must be "register_name"
+- return the extracted name
+- confidence must reflect certainty
+- reply warmly in the user's language
+- confirm that Refleksa will remember or recognise them
+
+If confidence is below 0.75:
+- use intent "unclear_name"
+- do not invent a name
+- ask the person to repeat it naturally in the same language
+
+PEOPLE ADMINISTRATION
+
+For list:
+- adminAction = "list"
+- do not invent people
+- use only the supplied knownPeople list
+- reply naturally in the user's language
+
+For remove:
+- adminAction = "remove"
+- extract the requested registered person's name
+- do not claim the person has already been removed
+- say that the removal request has been understood
+- the Android app will perform the actual deletion
+
+For rename:
+- adminAction = "rename"
+- extract oldName and newName
+- do not claim success unless both names are clear
+- the Android app will perform the actual rename
+
+NORMAL CONVERSATION
+
+Normal conversation must return:
+- intent = "normal"
+- adminAction = null
+- no invented identity action
+
+OUTPUT RULES
+
+Return ONLY valid JSON.
+
+The "reply" field must always be present for:
+- register_name
+- unclear_name
+- people_admin
+- an unknown visible person who should be asked their name
+
+For normal conversation, reply may be null.
+
+Use this exact structure:
+
 {
   "intent": "register_name|unclear_name|people_admin|normal",
-  "language": "it|en|ro|es|fr|de|pt|pl|hu|bg|zh|ar|unknown",
-  "name": null or "Name",
-  "oldName": null or "OldName",
-  "newName": null or "NewName",
-  "adminAction": null or "list|remove|rename",
+  "language": "detected BCP-47-style language code or unknown",
+  "name": null,
+  "oldName": null,
+  "newName": null,
+  "adminAction": null,
   "confidence": 0.0,
-  "reply": null or "natural reply in the user's language"
+  "reply": null
 }
               `.trim()
             }]
@@ -1098,25 +1165,87 @@ Return ONLY valid JSON:
             }]
           }
         ],
-        max_output_tokens: 220
+        max_output_tokens: 260
       })
     });
 
     const raw = await response.text();
-    const data = JSON.parse(raw);
+
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      console.error("IDENTITY OPENAI RESPONSE PARSE ERROR:", raw);
+
+      return res.json({
+        intent: "normal",
+        language: "unknown",
+        name: null,
+        oldName: null,
+        newName: null,
+        adminAction: null,
+        confidence: 0,
+        reply: null
+      });
+    }
+
+    if (!response.ok) {
+      console.error("IDENTITY OPENAI ERROR:", data);
+
+      return res.status(response.status).json({
+        intent: "normal",
+        language: "unknown",
+        name: null,
+        oldName: null,
+        newName: null,
+        adminAction: null,
+        confidence: 0,
+        reply: null
+      });
+    }
 
     const output =
       data.output_text ||
-      data.output?.flatMap(i => i.content || [])
-        ?.find(p => p.type === "output_text")?.text ||
+      data.output
+        ?.flatMap(item => item.content || [])
+        ?.find(part => part.type === "output_text")
+        ?.text ||
       "{}";
 
-    const parsed = JSON.parse(output);
+    let parsed;
 
-    return res.json(parsed);
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      console.error("IDENTITY RESULT JSON ERROR:", output);
+
+      parsed = {
+        intent: "normal",
+        language: "unknown",
+        name: null,
+        oldName: null,
+        newName: null,
+        adminAction: null,
+        confidence: 0,
+        reply: null
+      };
+    }
+
+    return res.json({
+      intent: parsed.intent || "normal",
+      language: parsed.language || "unknown",
+      name: parsed.name || null,
+      oldName: parsed.oldName || null,
+      newName: parsed.newName || null,
+      adminAction: parsed.adminAction || null,
+      confidence: Number(parsed.confidence) || 0,
+      reply: parsed.reply || null
+    });
 
   } catch (err) {
     console.error("IDENTITY ANALYZE ERROR:", err);
+
     return res.json({
       intent: "normal",
       language: "unknown",
