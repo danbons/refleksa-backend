@@ -1260,6 +1260,288 @@ Use this exact structure:
 });
 
 // ===============================
+// COMMAND ENGINE
+// ===============================
+app.post("/command/analyze", requirePrototypeToken, async (req, res) => {
+  try {
+    const {
+      text,
+      knownPeople,
+      currentPerson
+    } = req.body || {};
+
+    const cleanText = String(text || "").trim();
+
+    if (!cleanText) {
+      return res.json({
+        handled: false,
+        action: "none",
+        language: "unknown",
+        parameters: {},
+        confidence: 0
+      });
+    }
+
+    const people = Array.isArray(knownPeople)
+      ? knownPeople.filter(Boolean)
+      : [];
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
+
+        input: [
+          {
+            role: "system",
+            content: [{
+              type: "input_text",
+              text: `
+You are Refleksa's multilingual Command Engine.
+
+Your job is to understand whether the user's latest message is a command that must be executed by the Android device.
+
+Support every human language understood by the model.
+
+The transcript may contain:
+- speech-recognition errors
+- incomplete words
+- accents
+- phonetic spellings
+- incorrect punctuation
+
+Understand meaning semantically.
+Never rely only on exact keywords.
+Never invent missing parameters.
+
+CURRENT CONTEXT
+
+Known registered people:
+${JSON.stringify(people)}
+
+Current recognized person:
+${currentPerson || "unknown"}
+
+SUPPORTED ACTIONS
+
+PEOPLE:
+- list_people
+- delete_person
+- rename_person
+
+VOLUME:
+- volume_up
+- volume_down
+- volume_max
+- volume_mute
+- volume_normal
+
+APPS:
+- open_youtube
+- open_spotify
+- open_chrome
+- open_calendar
+- open_settings
+
+DEVICE:
+- standby
+- go_home
+- stop_speaking
+
+REMINDERS:
+- add_reminder
+- remove_reminder
+- clear_reminders
+- list_reminders
+
+TIME:
+- get_time
+- get_date
+
+RULES
+
+For delete_person:
+- extract the person's name into parameters.name
+- never claim that deletion already happened
+- Android performs the actual deletion
+
+For rename_person:
+- extract parameters.oldName
+- extract parameters.newName
+- never claim success before Android performs the action
+
+For list_people:
+- do not invent names
+- Android will provide the real list
+
+For add_reminder:
+- extract title, date and time only when reasonably clear
+- do not invent missing dates or times
+- use yyyy-MM-dd for an exact date when known
+- use HH:mm for an exact time when known
+
+For remove_reminder:
+- extract the reminder title when clear
+
+For volume, app, device and time commands:
+- do not generate a spoken confirmation here
+- only return the action
+
+If the message is normal conversation and not an executable command:
+- handled must be false
+- action must be "none"
+
+Detect the language of the user's latest message.
+
+Return ONLY valid JSON with this exact structure:
+
+{
+  "handled": true,
+  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+  "language": "BCP-47-style language code or unknown",
+  "parameters": {
+    "name": null,
+    "oldName": null,
+    "newName": null,
+    "title": null,
+    "date": null,
+    "time": null
+  },
+  "confidence": 0.0
+}
+              `.trim()
+            }]
+          },
+          {
+            role: "user",
+            content: [{
+              type: "input_text",
+              text: cleanText
+            }]
+          }
+        ],
+
+        max_output_tokens: 220
+      })
+    });
+
+    const raw = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      console.error("COMMAND OPENAI RESPONSE PARSE ERROR:", raw);
+
+      return res.json({
+        handled: false,
+        action: "none",
+        language: "unknown",
+        parameters: {},
+        confidence: 0
+      });
+    }
+
+    if (!response.ok) {
+      console.error("COMMAND OPENAI ERROR:", data);
+
+      return res.status(response.status).json({
+        handled: false,
+        action: "none",
+        language: "unknown",
+        parameters: {},
+        confidence: 0
+      });
+    }
+
+    const output =
+      data.output_text ||
+      data.output
+        ?.flatMap(item => item.content || [])
+        ?.find(part => part.type === "output_text")
+        ?.text ||
+      "{}";
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      console.error("COMMAND RESULT JSON ERROR:", output);
+
+      parsed = {
+        handled: false,
+        action: "none",
+        language: "unknown",
+        parameters: {},
+        confidence: 0
+      };
+    }
+
+    const validActions = new Set([
+      "none",
+      "list_people",
+      "delete_person",
+      "rename_person",
+      "volume_up",
+      "volume_down",
+      "volume_max",
+      "volume_mute",
+      "volume_normal",
+      "open_youtube",
+      "open_spotify",
+      "open_chrome",
+      "open_calendar",
+      "open_settings",
+      "standby",
+      "go_home",
+      "stop_speaking",
+      "add_reminder",
+      "remove_reminder",
+      "clear_reminders",
+      "list_reminders",
+      "get_time",
+      "get_date"
+    ]);
+
+    const action = validActions.has(parsed.action)
+      ? parsed.action
+      : "none";
+
+    return res.json({
+      handled: parsed.handled === true && action !== "none",
+      action,
+      language: parsed.language || "unknown",
+      parameters: {
+        name: parsed.parameters?.name || null,
+        oldName: parsed.parameters?.oldName || null,
+        newName: parsed.parameters?.newName || null,
+        title: parsed.parameters?.title || null,
+        date: parsed.parameters?.date || null,
+        time: parsed.parameters?.time || null
+      },
+      confidence: Number(parsed.confidence) || 0
+    });
+
+  } catch (err) {
+    console.error("COMMAND ANALYZE ERROR:", err);
+
+    return res.json({
+      handled: false,
+      action: "none",
+      language: "unknown",
+      parameters: {},
+      confidence: 0
+    });
+  }
+});
+
+// ===============================
 // MEMORY CONSOLIDATION
 // ===============================
 app.post("/memory/consolidate", requirePrototypeToken, async (req, res) => {
