@@ -1373,6 +1373,7 @@ VOLUME:
 - volume_up
 - volume_down
 - volume_max
+- volume_min
 - volume_mute
 - volume_normal
 
@@ -1575,7 +1576,7 @@ Return ONLY valid JSON using exactly this structure:
 
 {
   "route": "normal|command|knowledge",
-  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
   "knowledgeIntent": "none|save_object|find_object",
   "language": "BCP-47-style language code or unknown",
   "parameters": {
@@ -1655,6 +1656,7 @@ Return ONLY valid JSON using exactly this structure:
       "volume_up",
       "volume_down",
       "volume_max",
+      "volume_min",
       "volume_mute",
       "volume_normal",
       "open_youtube",
