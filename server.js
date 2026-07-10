@@ -1272,18 +1272,29 @@ app.post("/command/analyze", requirePrototypeToken, async (req, res) => {
 
     const cleanText = String(text || "").trim();
 
+    const emptyResult = {
+      handled: false,
+      action: "none",
+      language: "unknown",
+      parameters: {
+        name: null,
+        oldName: null,
+        newName: null,
+        title: null,
+        date: null,
+        time: null
+      },
+      confidence: 0
+    };
+
     if (!cleanText) {
-      return res.json({
-        handled: false,
-        action: "none",
-        language: "unknown",
-        parameters: {},
-        confidence: 0
-      });
+      return res.json(emptyResult);
     }
 
     const people = Array.isArray(knownPeople)
-      ? knownPeople.filter(Boolean)
+      ? knownPeople
+          .map(person => String(person || "").trim())
+          .filter(Boolean)
       : [];
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -1293,7 +1304,10 @@ app.post("/command/analyze", requirePrototypeToken, async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
+        model:
+          process.env.OPENAI_COMMAND_MODEL ||
+          process.env.OPENAI_MEMORY_MODEL ||
+          "gpt-4.1-mini",
 
         input: [
           {
@@ -1301,21 +1315,27 @@ app.post("/command/analyze", requirePrototypeToken, async (req, res) => {
             content: [{
               type: "input_text",
               text: `
-You are Refleksa's multilingual Command Engine.
+You are Refleksa's fast multilingual Command Router.
 
-Your job is to understand whether the user's latest message is a command that must be executed by the Android device.
+Classify the user's latest transcript as either:
 
-Support every human language understood by the model.
+1. a supported executable command
+2. normal conversation
+
+Support every language understood by the model.
 
 The transcript may contain:
-- speech-recognition errors
-- incomplete words
-- accents
+- speech-recognition mistakes
+- missing or incorrect words
 - phonetic spellings
+- accents
+- repeated fragments
+- malformed grammar
 - incorrect punctuation
 
-Understand meaning semantically.
-Never rely only on exact keywords.
+Understand the intended meaning semantically.
+Do not rely only on exact keywords.
+Never invent a command when the message is ordinary conversation.
 Never invent missing parameters.
 
 CURRENT CONTEXT
@@ -1328,76 +1348,177 @@ ${currentPerson || "unknown"}
 
 SUPPORTED ACTIONS
 
-PEOPLE:
+PEOPLE
 - list_people
 - delete_person
 - rename_person
 
-VOLUME:
+VOLUME
 - volume_up
 - volume_down
 - volume_max
 - volume_mute
 - volume_normal
 
-APPS:
+APPS
 - open_youtube
 - open_spotify
 - open_chrome
 - open_calendar
 - open_settings
 
-DEVICE:
+DEVICE
 - standby
 - go_home
 - stop_speaking
 
-REMINDERS:
+REMINDERS
 - add_reminder
 - remove_reminder
 - clear_reminders
 - list_reminders
 
-TIME:
+TIME
 - get_time
 - get_date
 
-RULES
+SEMANTIC EXAMPLES
 
-For delete_person:
-- extract the person's name into parameters.name
-- never claim that deletion already happened
-- Android performs the actual deletion
+list_people includes requests such as:
+- who do you know
+- which people do you know
+- do you know anyone
+- who is registered
+- anyone besides me
+- tell me which people you know
+- chi conosci
+- quali persone conosci
+- conosci qualcuno
+- che persone conosci
+- conosci altre persone oltre a me
+- sai dirmi se conosci qualche persona
+- di persone chi conosci
 
-For rename_person:
-- extract parameters.oldName
-- extract parameters.newName
-- never claim success before Android performs the action
+These must be classified as list_people even when grammatically imperfect.
+
+delete_person includes requests such as:
+- remove NAME
+- delete NAME
+- forget NAME
+- remove NAME from memory
+- take NAME out of the registered people
+- rimuovi NAME
+- elimina NAME
+- cancella NAME
+- dimentica NAME
+- togli NAME dalle persone conosciute
+- rimuovi la persona NAME
+- cancella la persona NAME
+
+Tolerate likely transcription mistakes in the command verb, for example:
+- rimovi
+- remuovi
+- ti muovi la persona
+- rimuove persona
+
+Use the complete sentence to infer whether deletion was intended.
+
+NAME CORRECTION RULE
+
+Use knownPeople to correct a likely speech-recognition error only when one registered name is an obvious and unique close match.
+
+Examples:
+
+Known people:
+["Daniele", "Krina"]
+
+Transcript name:
+"Acrina"
+
+Return:
+"Krina"
+
+Transcript name:
+"Crina"
+
+Return:
+"Krina"
+
+Do not correct the name when:
+- more than one registered person is a plausible match
+- the requested name is clearly a different name
+- confidence is low
+
+For a deletion request, prefer an exact known registered person name in parameters.name when the intended match is clear.
+
+rename_person includes:
+- rename OLD_NAME to NEW_NAME
+- change OLD_NAME's name to NEW_NAME
+- rinomina OLD_NAME in NEW_NAME
+- cambia il nome di OLD_NAME in NEW_NAME
+
+COMMAND RULES
 
 For list_people:
-- do not invent names
-- Android will provide the real list
+- action = "list_people"
+- Android will read the real people database
+- do not return names as parameters
+- never answer conversationally
+
+For delete_person:
+- action = "delete_person"
+- put the corrected registered name in parameters.name when clear
+- never claim that deletion already happened
+- Android performs the deletion
+
+For rename_person:
+- action = "rename_person"
+- put the current name in parameters.oldName
+- put the requested new name in parameters.newName
+- Android performs the rename
 
 For add_reminder:
-- extract title, date and time only when reasonably clear
-- do not invent missing dates or times
-- use yyyy-MM-dd for an exact date when known
-- use HH:mm for an exact time when known
+- extract parameters.title
+- extract parameters.date when clear
+- extract parameters.time when clear
+- use yyyy-MM-dd for exact dates
+- use HH:mm for exact times
+- never invent missing date or time information
 
 For remove_reminder:
-- extract the reminder title when clear
+- extract parameters.title when clear
 
 For volume, app, device and time commands:
-- do not generate a spoken confirmation here
-- only return the action
+- return only the action and parameters
+- do not produce a spoken reply
 
-If the message is normal conversation and not an executable command:
-- handled must be false
-- action must be "none"
+NORMAL CONVERSATION
 
-Detect the language of the user's latest message.
+Messages such as greetings, feelings, questions, opinions, jokes and ordinary conversation must return:
 
-Return ONLY valid JSON with this exact structure:
+- handled = false
+- action = "none"
+
+Examples:
+- how are you
+- come stai
+- I am tired
+- sono stanco
+- good afternoon
+- buon pomeriggio
+- tell me a joke
+- parlami della giornata
+
+Do not classify a vague fragment as a command unless the intended device action is reasonably clear.
+
+Examples:
+- "volume" alone is not enough
+- "YouTube" alone is not necessarily enough
+- "people" alone is not enough
+
+Detect the language of the latest transcript.
+
+Return ONLY valid JSON using exactly this structure:
 
 {
   "handled": true,
@@ -1425,7 +1546,7 @@ Return ONLY valid JSON with this exact structure:
           }
         ],
 
-        max_output_tokens: 220
+        max_output_tokens: 140
       })
     });
 
@@ -1437,26 +1558,12 @@ Return ONLY valid JSON with this exact structure:
       data = JSON.parse(raw);
     } catch {
       console.error("COMMAND OPENAI RESPONSE PARSE ERROR:", raw);
-
-      return res.json({
-        handled: false,
-        action: "none",
-        language: "unknown",
-        parameters: {},
-        confidence: 0
-      });
+      return res.json(emptyResult);
     }
 
     if (!response.ok) {
       console.error("COMMAND OPENAI ERROR:", data);
-
-      return res.status(response.status).json({
-        handled: false,
-        action: "none",
-        language: "unknown",
-        parameters: {},
-        confidence: 0
-      });
+      return res.status(response.status).json(emptyResult);
     }
 
     const output =
@@ -1473,14 +1580,7 @@ Return ONLY valid JSON with this exact structure:
       parsed = JSON.parse(output);
     } catch {
       console.error("COMMAND RESULT JSON ERROR:", output);
-
-      parsed = {
-        handled: false,
-        action: "none",
-        language: "unknown",
-        parameters: {},
-        confidence: 0
-      };
+      return res.json(emptyResult);
     }
 
     const validActions = new Set([
@@ -1513,8 +1613,12 @@ Return ONLY valid JSON with this exact structure:
       ? parsed.action
       : "none";
 
+    const handled =
+      parsed.handled === true &&
+      action !== "none";
+
     return res.json({
-      handled: parsed.handled === true && action !== "none",
+      handled,
       action,
       language: parsed.language || "unknown",
       parameters: {
@@ -1535,7 +1639,14 @@ Return ONLY valid JSON with this exact structure:
       handled: false,
       action: "none",
       language: "unknown",
-      parameters: {},
+      parameters: {
+        name: null,
+        oldName: null,
+        newName: null,
+        title: null,
+        date: null,
+        time: null
+      },
       confidence: 0
     });
   }
