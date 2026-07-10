@@ -1838,6 +1838,7 @@ PEOPLE
 VOLUME
 - volume_up
 - volume_down
+- volume_min
 - volume_max
 - volume_mute
 - volume_normal
@@ -2072,6 +2073,7 @@ Return ONLY valid JSON using exactly this structure:
       "rename_person",
       "volume_up",
       "volume_down",
+      "volume_min",
       "volume_max",
       "volume_mute",
       "volume_normal",
