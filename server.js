@@ -1287,10 +1287,35 @@ app.post("/route/analyze", requirePrototypeToken, async (req, res) => {
     const {
       text,
       knownPeople,
-      currentPerson
+      currentPerson,
+      currentDate,
+      currentTime,
+      timeZone
     } = req.body || {};
 
     const cleanText = String(text || "").trim();
+
+    const safeTimeZone =
+      String(timeZone || "Europe/London").trim();
+
+    const safeCurrentDate =
+      String(
+        currentDate ||
+        new Date().toLocaleDateString("en-CA", {
+          timeZone: safeTimeZone
+        })
+      ).trim();
+
+    const safeCurrentTime =
+      String(
+        currentTime ||
+        new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          timeZone: safeTimeZone
+        })
+      ).trim();
 
     if (!cleanText) {
       return res.json(emptyResult);
@@ -1355,6 +1380,24 @@ ${JSON.stringify(people)}
 
 Current recognized person:
 ${currentPerson || "unknown"}
+
+CURRENT LOCAL TIME CONTEXT
+
+Current local date:
+${safeCurrentDate}
+
+Current local time:
+${safeCurrentTime}
+
+Device time zone:
+${safeTimeZone}
+
+These values are authoritative.
+
+Never ask the user for their city or time zone when creating a local reminder.
+Always use the supplied device time zone.
+
+Never generate a reminder date in the past.
 
 ==================================================
 ROUTE: COMMAND
@@ -1453,11 +1496,26 @@ For rename_person:
 - parameters.oldName = current registered name
 - parameters.newName = requested new name
 
-For reminders:
-- extract title, date and time only when clear
-- use yyyy-MM-dd for exact dates
-- use HH:mm for exact times
-- do not invent missing information
+For add_reminder:
+
+- Extract parameters.title from the requested action.
+- Return parameters.date in yyyy-MM-dd format.
+- Return parameters.time in HH:mm format.
+- Resolve relative dates using the authoritative current local date.
+
+Date rules:
+
+- "today" and equivalents mean the supplied current local date.
+- "tomorrow" and equivalents mean the day after the supplied current local date.
+- If the user provides only a time and no date:
+- use the current local date if that time is still in the future;
+- otherwise use the following local date.
+- If the user gives an explicit future calendar date, use that date.
+- Never produce a date earlier than the current local date.
+- Never reuse dates from memories or previous unrelated conversations.
+- Never ask for a city or time zone.
+- Use the supplied device time zone automatically.
+- Ask a follow-up question only when the title or time is genuinely missing.
 
 For command route:
 - action must not be "none"
