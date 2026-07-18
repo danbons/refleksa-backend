@@ -853,6 +853,269 @@ Rules:
 });
 
 // ===============================
+// MEMORY TRANSLATOR
+// ===============================
+app.post(
+  "/memory/translate",
+  requirePrototypeToken,
+  async (req, res) => {
+    try {
+      const {
+        memories,
+        targetLanguageCode
+      } = req.body || {};
+
+      const cleanTargetLanguage =
+        String(targetLanguageCode || "")
+          .trim()
+          .toLowerCase();
+
+      if (!Array.isArray(memories)) {
+        return res.status(400).json({
+          error: "memories must be an array.",
+          translations: []
+        });
+      }
+
+      const cleanMemories = memories
+        .map(memory => String(memory || "").trim())
+        .filter(Boolean)
+        .slice(0, 5);
+
+      if (cleanMemories.length === 0) {
+        return res.json({
+          translations: []
+        });
+      }
+
+      if (!cleanTargetLanguage) {
+        return res.status(400).json({
+          error: "Missing targetLanguageCode.",
+          translations: cleanMemories
+        });
+      }
+
+      console.log("MEMORY TRANSLATE USED:", {
+        device: req.prototypeDevice.deviceId,
+        partner: req.prototypeDevice.partner,
+        memoryCount: cleanMemories.length,
+        targetLanguageCode: cleanTargetLanguage,
+        time: new Date().toISOString()
+      });
+
+      const languageNames = {
+        it: "Italian",
+        en: "English",
+        ro: "Romanian",
+        es: "Spanish",
+        fr: "French",
+        de: "German",
+        pt: "Portuguese",
+        ar: "Arabic",
+        zh: "Chinese",
+        pl: "Polish",
+        bg: "Bulgarian",
+        hu: "Hungarian"
+      };
+
+      const targetLanguage =
+        languageNames[cleanTargetLanguage] ||
+        cleanTargetLanguage;
+
+      /*
+       * English is already the canonical memory language.
+       * Avoid an unnecessary OpenAI request.
+       */
+      if (cleanTargetLanguage === "en") {
+        return res.json({
+          translations: cleanMemories
+        });
+      }
+
+      const response = await fetch(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model:
+              process.env.OPENAI_MEMORY_MODEL ||
+              "gpt-4.1-mini",
+
+            input: [
+              {
+                role: "system",
+                content: [
+                  {
+                    type: "input_text",
+                    text: `
+You are Refleksa's memory translation engine.
+
+Translate each supplied memory into ${targetLanguage}.
+
+Rules:
+
+- Preserve the original meaning exactly.
+- Do not invent information.
+- Do not remove information.
+- Do not summarize or combine memories.
+- Keep the same number of items.
+- Keep the same item order.
+- Preserve people's names, brands, titles and dates.
+- Use natural, concise language suitable for display on a smart mirror.
+- The memories describe the user in the third person.
+- Do not add bullets, numbers or explanations.
+- Return ONLY valid JSON.
+
+Required JSON format:
+
+{
+  "translations": [
+    "translated memory 1",
+    "translated memory 2"
+  ]
+}
+                    `.trim()
+                  }
+                ]
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: JSON.stringify({
+                      targetLanguageCode:
+                        cleanTargetLanguage,
+                      memories: cleanMemories
+                    })
+                  }
+                ]
+              }
+            ],
+
+            max_output_tokens: 500
+          })
+        }
+      );
+
+      const raw = await response.text();
+
+      let data;
+
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        console.error(
+          "MEMORY TRANSLATE OPENAI PARSE ERROR:",
+          raw
+        );
+
+        return res.json({
+          translations: cleanMemories
+        });
+      }
+
+      if (!response.ok) {
+        console.error(
+          "MEMORY TRANSLATE OPENAI ERROR:",
+          data
+        );
+
+        return res.json({
+          translations: cleanMemories
+        });
+      }
+
+      const output =
+        data.output_text ||
+        data.output
+          ?.flatMap(item => item.content || [])
+          ?.find(part => part.type === "output_text")
+          ?.text ||
+        "";
+
+      let parsed;
+
+      try {
+        parsed = JSON.parse(output);
+      } catch {
+        console.error(
+          "MEMORY TRANSLATE RESULT PARSE ERROR:",
+          output
+        );
+
+        return res.json({
+          translations: cleanMemories
+        });
+      }
+
+      const translations =
+        Array.isArray(parsed.translations)
+          ? parsed.translations
+              .map(item => String(item || "").trim())
+              .filter(Boolean)
+          : [];
+
+      /*
+       * Never return a partial or mismatched translation.
+       * The Android app expects the same number and order.
+       */
+      if (
+        translations.length !== cleanMemories.length
+      ) {
+        console.error(
+          "MEMORY TRANSLATE COUNT MISMATCH:",
+          {
+            originalCount: cleanMemories.length,
+            translatedCount: translations.length
+          }
+        );
+
+        return res.json({
+          translations: cleanMemories
+        });
+      }
+
+      console.log("MEMORY TRANSLATE SUCCESS:", {
+        memoryCount: translations.length,
+        targetLanguageCode: cleanTargetLanguage
+      });
+
+      return res.json({
+        translations
+      });
+
+    } catch (err) {
+      console.error(
+        "MEMORY TRANSLATE ERROR:",
+        err
+      );
+
+      /*
+       * The Android client also has its own fallback,
+       * but the server should always return valid JSON.
+       */
+      const fallbackMemories =
+        Array.isArray(req.body?.memories)
+          ? req.body.memories
+              .map(item => String(item || "").trim())
+              .filter(Boolean)
+              .slice(0, 5)
+          : [];
+
+      return res.json({
+        translations: fallbackMemories
+      });
+    }
+  }
+);
+
+// ===============================
 // KNOWLEDGE ANALYZER
 // ===============================
 app.post("/knowledge/analyze", requirePrototypeToken, async (req, res) => {
