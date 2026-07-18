@@ -1116,6 +1116,320 @@ Required JSON format:
 );
 
 // ===============================
+// MEMORY REVEAL
+// ===============================
+app.post(
+  "/memory/reveal",
+  requirePrototypeToken,
+  async (req, res) => {
+    try {
+      const {
+        memories,
+        targetLanguageCode,
+        personName
+      } = req.body || {};
+
+      if (!Array.isArray(memories)) {
+        return res.status(400).json({
+          error: "memories must be an array.",
+          introduction: "",
+          items: []
+        });
+      }
+
+      const cleanMemories = memories
+        .map(memory => String(memory || "").trim())
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const cleanLanguageCode =
+        String(targetLanguageCode || "en")
+          .trim()
+          .toLowerCase();
+
+      const cleanPersonName =
+        String(personName || "")
+          .trim();
+
+      if (cleanMemories.length === 0) {
+        return res.json({
+          introduction: "",
+          items: []
+        });
+      }
+
+      console.log("MEMORY REVEAL USED:", {
+        device: req.prototypeDevice.deviceId,
+        partner: req.prototypeDevice.partner,
+        personName: cleanPersonName || "unknown",
+        targetLanguageCode: cleanLanguageCode,
+        memoryCount: cleanMemories.length,
+        time: new Date().toISOString()
+      });
+
+      const languageNames = {
+        it: "Italian",
+        en: "English",
+        ro: "Romanian",
+        es: "Spanish",
+        fr: "French",
+        de: "German",
+        pt: "Portuguese",
+        ar: "Arabic",
+        zh: "Chinese",
+        pl: "Polish",
+        bg: "Bulgarian",
+        hu: "Hungarian"
+      };
+
+      const targetLanguage =
+        languageNames[cleanLanguageCode] ||
+        cleanLanguageCode;
+
+      const systemPrompt = `
+You are Refleksa's memory presentation engine.
+
+Transform personal memories into a short, elegant memory reveal.
+
+Target language: ${targetLanguage}
+
+The person standing in front of the mirror is:
+${cleanPersonName || "the user"}
+
+Return a maximum of 5 memory items.
+
+IMPORTANT SELECTION RULES:
+
+- Prefer the most meaningful and personal memories.
+- Remove duplicates or memories expressing the same idea.
+- Do not include weak, temporary or trivial information.
+- It is acceptable to return fewer than 5 memories.
+- Normally return 3 to 5 useful memories.
+- Never invent information.
+
+For every selected memory create:
+
+1. displayText
+A very short summary for the mirror panel.
+
+Display text rules:
+
+- Maximum approximately 7 words.
+- It may be a short label or compact phrase.
+- Do not write a full long sentence.
+- Do not add bullets or numbering.
+- Do not repeat the person's name unnecessarily.
+- Preserve names, brands, places and important details.
+
+Good display examples:
+
+"Cantante preferito: Elvis Presley"
+"Crina è molto importante per te"
+"Ama viaggiare"
+"Fondatore di Refleksa"
+"Obiettivo: espandere Refleksa"
+
+Bad display examples:
+
+"Daniele ha detto che il suo cantante preferito è Elvis Presley."
+"Una delle cose che ricordo di te è che ami particolarmente viaggiare."
+
+2. spokenText
+A short, warm and natural sentence spoken directly to the person.
+
+Spoken text rules:
+
+- Speak directly to the user using "you".
+- Do not describe the person in the third person.
+- Sound warm and human.
+- Keep each spoken sentence concise.
+- Maximum approximately 14 words.
+- Vary the opening naturally.
+- Avoid repeating "I remember" for every item.
+- Do not add explanations or follow-up questions.
+
+Also create one short introduction.
+
+Introduction rules:
+
+- Maximum approximately 10 words.
+- Address the person naturally if their name is available.
+- Do not mention how many memories will be shown.
+- Do not sound robotic.
+
+Return ONLY valid JSON using exactly this structure:
+
+{
+  "introduction": "short natural introduction",
+  "items": [
+    {
+      "displayText": "short panel text",
+      "spokenText": "short natural spoken sentence"
+    }
+  ]
+}
+      `.trim();
+
+      const response = await fetch(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model:
+              process.env.OPENAI_MEMORY_MODEL ||
+              "gpt-4.1-mini",
+
+            input: [
+              {
+                role: "system",
+                content: [
+                  {
+                    type: "input_text",
+                    text: systemPrompt
+                  }
+                ]
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: JSON.stringify({
+                      personName:
+                        cleanPersonName || null,
+                      targetLanguageCode:
+                        cleanLanguageCode,
+                      memories:
+                        cleanMemories
+                    })
+                  }
+                ]
+              }
+            ],
+
+            max_output_tokens: 700
+          })
+        }
+      );
+
+      const rawResponse = await response.text();
+
+      let responseData;
+
+      try {
+        responseData = JSON.parse(rawResponse);
+      } catch {
+        console.error(
+          "MEMORY REVEAL OPENAI PARSE ERROR:",
+          rawResponse
+        );
+
+        return res.json({
+          introduction: "",
+          items: []
+        });
+      }
+
+      if (!response.ok) {
+        console.error(
+          "MEMORY REVEAL OPENAI ERROR:",
+          responseData
+        );
+
+        return res.json({
+          introduction: "",
+          items: []
+        });
+      }
+
+      const outputText =
+        responseData.output_text ||
+        responseData.output
+          ?.flatMap(item => item.content || [])
+          ?.find(part => part.type === "output_text")
+          ?.text ||
+        "";
+
+      let parsed;
+
+      try {
+        parsed = JSON.parse(outputText);
+      } catch {
+        console.error(
+          "MEMORY REVEAL RESULT PARSE ERROR:",
+          outputText
+        );
+
+        return res.json({
+          introduction: "",
+          items: []
+        });
+      }
+
+      const introduction =
+        String(parsed.introduction || "").trim();
+
+      const items =
+        Array.isArray(parsed.items)
+          ? parsed.items
+              .map(item => ({
+                displayText:
+                  String(item?.displayText || "")
+                    .trim(),
+
+                spokenText:
+                  String(item?.spokenText || "")
+                    .trim()
+              }))
+              .filter(item =>
+                item.displayText &&
+                item.spokenText
+              )
+              .slice(0, 5)
+          : [];
+
+      if (items.length === 0) {
+        console.error(
+          "MEMORY REVEAL RETURNED NO VALID ITEMS"
+        );
+
+        return res.json({
+          introduction: "",
+          items: []
+        });
+      }
+
+      console.log("MEMORY REVEAL SUCCESS:", {
+        personName: cleanPersonName || "unknown",
+        targetLanguageCode: cleanLanguageCode,
+        itemCount: items.length
+      });
+
+      return res.json({
+        introduction,
+        items
+      });
+
+    } catch (err) {
+      console.error(
+        "MEMORY REVEAL ERROR:",
+        err
+      );
+
+      return res.json({
+        introduction: "",
+        items: []
+      });
+    }
+  }
+);
+
+// ===============================
 // KNOWLEDGE ANALYZER
 // ===============================
 app.post("/knowledge/analyze", requirePrototypeToken, async (req, res) => {
