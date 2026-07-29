@@ -1431,7 +1431,6 @@
                   {
                       type: "input_text",
                       text: `
-                  text: `
     You are Refleksa's multilingual Identity and People Engine.
     
     You support every human language that the model understands.
@@ -2413,7 +2412,7 @@
     
     {
       "handled": true,
-      "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+      "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_min|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
       "language": "BCP-47-style language code or unknown",
       "parameters": {
         "name": null,
@@ -2531,138 +2530,134 @@
     });
     
     // ===============================
-    // MEMORY CONSOLIDATION
-    // ===============================
-    app.post("/memory/consolidate", requirePrototypeToken, async (req, res) => {
-      try {
-    
-        const { memories } = req.body || {};
-    
-        if (!Array.isArray(memories) || memories.length === 0) {
-          return res.json({ consolidated: [] });
-        }
-    
-        const data = await callResponses({
-    model:
+// MEMORY CONSOLIDATION
+// ===============================
+app.post("/memory/consolidate", requirePrototypeToken, async (req, res) => {
+  try {
+    const { memories } = req.body || {};
+
+    if (!Array.isArray(memories) || memories.length === 0) {
+      return res.json({
+        consolidated: []
+      });
+    }
+
+    const data = await callResponses({
+      model:
         process.env.OPENAI_MEMORY_MODEL ||
         "gpt-4.1-mini",
 
-    input: [
+      input: [
         {
-            role: "system",
-            content: [
-                {
-                    type: "input_text",
-                    text: systemPrompt
-                }
-            ]
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: `
+You are Refleksa's Memory Consolidation Engine.
+
+Merge related memories into richer human memories.
+
+Rules:
+
+- Merge memories about the same people.
+- Merge memories about the same future event.
+- Merge memories about the same goal.
+- Merge memories about the same emotional pattern.
+- Do not invent facts.
+- Preserve important information.
+- Preserve privacy.
+- Preserve future follow-ups.
+- Do not merge memories about different people unless the input clearly says they are part of the same event.
+
+- If a memory mentions Greta and another memory mentions mother, Esther, Samantha, China, or another person, keep them separate unless the same sentence explicitly connects them.
+
+- Prefer multiple smaller accurate consolidated memories over one large mixed memory.
+
+- When people names are uncertain due to transcription errors, do not merge them with unrelated memories.
+
+You MUST always return an object with this exact shape:
+
+{
+  "consolidated": [
+    {
+      "text": "human consolidated memory in English",
+      "category": "preference|person|routine|emotion|goal|hobby|health|relationship|event|other",
+      "importance": 1-10,
+      "privacy": "normal|sensitive|surprise",
+      "date": null,
+      "follow_up_after": null,
+      "should_follow_up": false,
+      "people": []
+    }
+  ]
+}
+
+If memories are not strongly related, still return 1 to 3 useful consolidated memories summarizing the most meaningful facts.
+
+Never return an empty consolidated array when at least one input memory has importance >= 5.
+If there are memories with importance >= 5, you MUST return at least one consolidated memory.
+The input memories are already filtered and considered meaningful. Your task is not to decide whether to keep them, but to consolidate them.
+
+Return ONLY valid JSON.
+              `.trim()
+            }
+          ]
         },
         {
-            role: "user",
-            content: [
-                {
-                    type: "input_text",
-                    text: `
-    You are Refleksa's Memory Consolidation Engine.
-    
-    Merge related memories into richer human memories.
-    
-    Rules:
-    
-    - Merge memories about the same people.
-    - Merge memories about the same future event.
-    - Merge memories about the same goal.
-    - Merge memories about the same emotional pattern.
-    - Do not invent facts.
-    - Preserve important information.
-    - Preserve privacy.
-    - Preserve future follow-ups.
-    - Do not merge memories about different people unless the input clearly says they are part of the same event.
-    
-    - If a memory mentions Greta and another memory mentions mother, Esther, Samantha, China, or another person, keep them separate unless the same sentence explicitly connects them.
-    
-    - Prefer multiple smaller accurate consolidated memories over one large mixed memory.
-    
-    - When people names are uncertain due to transcription errors, do not merge them with unrelated memories.
-    
-    You MUST always return an object with this exact shape:
-    
-    {
-      "consolidated": [
-        {
-          "text": "human consolidated memory in English",
-          "category": "preference|person|routine|emotion|goal|hobby|health|relationship|event|other",
-          "importance": 1-10,
-          "privacy": "normal|sensitive|surprise",
-          "date": null,
-          "follow_up_after": null,
-          "should_follow_up": false,
-          "people": []
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: JSON.stringify(memories)
+            }
+          ]
         }
-      ]
-    }
-    
-    If memories are not strongly related, still return 1 to 3 useful consolidated memories summarizing the most meaningful facts.
-    
-    Never return an empty consolidated array when at least one input memory has importance >= 5.
-    If there are memories with importance >= 5, you MUST return at least one consolidated memory.
-    The input memories are already filtered and considered meaningful. Your task is not to decide whether to keep them, but to consolidate them.
-    
-    Return ONLY valid JSON.
-                    `.trim()
-                  }]
-                },
-                {
-                  role: "user",
-                  content: [{
-                    type: "input_text",
-                    text: JSON.stringify(memories)
-                  }]
-                }
-              ],
-              max_output_tokens: 500
-            })
-          }
-        );
-    
-        const raw = await response.text();
-        const data = JSON.parse(raw);
-    
-        const output =
-          data.output_text ||
-          data.output?.flatMap(i => i.content || [])
-            ?.find(p => p.type === "output_text")?.text ||
-          '{"consolidated":[]}';
-    
-        let parsedOutput;
-    
+      ],
+
+      max_output_tokens: 500
+    });
+
+    const output =
+      data.output_text ||
+      data.output
+        ?.flatMap(item => item.content || [])
+        ?.find(part => part.type === "output_text")
+        ?.text ||
+      '{"consolidated":[]}';
+
+    let parsedOutput;
+
     try {
       parsedOutput = JSON.parse(output);
     } catch {
-      parsedOutput = { consolidated: [] };
+      parsedOutput = {
+        consolidated: []
+      };
     }
-    
+
     if (Array.isArray(parsedOutput)) {
       parsedOutput = {
         consolidated: parsedOutput
       };
     }
-    
-    if (!parsedOutput.consolidated) {
+
+    if (!Array.isArray(parsedOutput?.consolidated)) {
       parsedOutput = {
         consolidated: []
       };
     }
-    
+
     return res.json(parsedOutput);
-    
-      } catch (err) {
-        console.error("MEMORY CONSOLIDATION ERROR:", err);
-        return res.json({
-          consolidated: []
-        });
-      }
+
+  } catch (err) {
+    console.error("MEMORY CONSOLIDATION ERROR:", err);
+
+    return res.json({
+      consolidated: []
     });
+  }
+});
     
     const PORT = process.env.PORT || 3000;
     
