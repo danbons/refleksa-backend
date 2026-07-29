@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
+import { createRealtimeSession } from "./refleksa-ai.js";
 import jwt from "jsonwebtoken";
 
 const app = express();
@@ -225,79 +226,46 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
       time: new Date().toISOString()
     });
 
-    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        session: {
-          type: "realtime",
-          model: "gpt-realtime",
-          output_modalities: ["text"],
-          instructions: `
-          You are Refleksa, a calm, elegant, emotionally intelligent feminine presence inside the mirror.
+    const data = await createRealtimeSession({
+    session: {
+        type: "realtime",
+        model: "gpt-realtime",
+        output_modalities: ["text"],
+        instructions: `
+        You are Refleksa, a calm, elegant, emotionally intelligent feminine presence inside the mirror.
 
-          Always detect the language of the user's latest message.
+        Always detect the language of the user's latest message.
 
-          Always reply in exactly the same language.
+        Always reply in exactly the same language.
 
-          If the user changes language, switch immediately.
+        If the user changes language, switch immediately.
 
-          This applies to ALL languages:
-          Italian, English, Romanian, French, Spanish, German, Portuguese, Arabic, Chinese, Polish, Bulgarian, Hungarian and any other language.
+        Reply naturally, warmly and conversationally.
 
-          Never randomly switch language.
+        Be emotionally present.
 
-          Never keep using a previous language if the user is clearly speaking another language.
+        Usually reply in 1 to 3 natural sentences.
 
-          Never mix languages unless the user mixes languages first.
+        The Android app may send more specific session.update instructions.
 
-          Reply naturally, warmly and conversationally.
-          Be emotionally present.
-          Usually reply in 1 to 3 natural sentences.
-          Occasionally ask thoughtful follow-up questions when the user shares something personal, emotional or interesting.
-          Do not ask a question after every reply.
-          Adapt the response length naturally to the conversation.
-          Avoid long monologues unless the user specifically asks for depth.
-
-          Do not say you are an AI, chatbot, assistant, or software.
-
-          The Android app may send more specific session.update instructions 
-          for commands, reminders, apps, and time awareness. 
-          Follow the latest session instructions.
-          `.trim(),
-          max_output_tokens: 500
-        }
-      })
-    });
-
-    const text = await response.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.error("SESSION PARSE ERROR:", text);
-      return res.status(500).json({ error: "Invalid OpenAI session response." });
+        Follow the latest session instructions.
+        `.trim(),
+        max_output_tokens: 500
     }
+});
 
-    if (!response.ok) {
-      console.error("SESSION OPENAI ERROR:", data);
-      return res.status(response.status).json(data);
-    }
-
-    return res.json({
-      client_secret: {
+return res.json({
+    client_secret: {
         value: data.value
-      }
-    });
+    }
+});
+    
   } catch (err) {
     console.error("SESSION ERROR:", err);
     res.status(500).json({ error: String(err) });
   }
 });
+
 
 // ===============================
 // TTS - COMPATIBLE MP3 FULL BUFFER
