@@ -147,6 +147,60 @@ async function createRealtimeQwen(body) {
 }
 
 /* ========================================= */
+/* OPENAI RESPONSES API                      */
+/* ========================================= */
+
+async function callResponsesOpenAI(body) {
+
+    const response = await fetchWithTimeout(
+        "https://api.openai.com/v1/responses",
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+        }
+    );
+
+    const text = await response.text();
+
+    let data;
+
+    try {
+        data = JSON.parse(text);
+    } catch {
+        throw new Error("Invalid OpenAI responses response.");
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data.error?.message || "OpenAI responses failed."
+        );
+    }
+
+    logEngine("OpenAI Responses completed.", {
+        provider: "OPENAI"
+    });
+
+    return data;
+
+}
+
+/* ========================================= */
+/* QWEN RESPONSES API                        */
+/* ========================================= */
+
+async function callResponsesQwen(body) {
+
+    throw new Error(
+        "Qwen Responses provider not implemented yet."
+    );
+
+}
+
+/* ========================================= */
 /* PUBLIC API                                */
 /* ========================================= */
 
@@ -169,4 +223,30 @@ export async function createRealtimeSession(body) {
 
     }
 
+}  
+
+/* ========================================= */
+/* RESPONSES API                             */
+/* ========================================= */
+
+export async function callResponses(body) {
+
+    const provider = getProvider();
+
+    logEngine("Responses request.", {
+        provider
+    });
+
+    switch (provider) {
+
+        case "QWEN":
+            return callResponsesQwen(body);
+
+        case "OPENAI":
+        default:
+            return callResponsesOpenAI(body);
+
+    }
+
 }
+
