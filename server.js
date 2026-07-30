@@ -1949,12 +1949,16 @@ app.post("/route/analyze", requirePrototypeToken, async (req, res) => {
       text,
       knownPeople,
       currentPerson,
+      pendingDeletePersonName,
       currentDate,
       currentTime,
       timeZone
     } = req.body || {};
 
     const cleanText = String(text || "").trim();
+
+    const safePendingDeletePersonName =
+      String(pendingDeletePersonName || "").trim();
 
     const safeTimeZone =
       String(timeZone || "Europe/London").trim();
@@ -2181,6 +2185,61 @@ Date rules:
 For command route:
 - action must not be "none"
 - knowledgeIntent must be "none"
+
+PENDING PERSON DELETION
+
+Person currently waiting for deletion confirmation:
+${safePendingDeletePersonName || "none"}
+
+When this value is not "none", interpret the latest transcript primarily
+as a confirmation, rejection or correction of this pending deletion.
+
+Understand confirmations and rejections semantically in every language,
+including short replies and likely speech-recognition mistakes.
+
+Examples of confirmation meanings:
+- yes
+- yes, do it
+- confirm
+- correct
+- certainly
+- sì
+- certo
+- confermo
+- esatto
+- da
+- oui
+- ja
+- sí
+
+When confirmed:
+- route = "command"
+- action = "confirm_delete_person"
+- parameters.name = the pending person name
+
+Examples of rejection meanings:
+- no
+- cancel
+- don't do it
+- leave them
+- no, I changed my mind
+- annulla
+- no
+- lascia stare
+- non cancellarlo
+- nu
+- non
+- nein
+
+When rejected:
+- route = "command"
+- action = "cancel_delete_person"
+- parameters.name = the pending person name
+
+While deletion confirmation is pending:
+- never interpret "yes" as normal conversation
+- never start identity onboarding
+- never delete a different person unless the user clearly gives a correction
 
 ==================================================
 ROUTE: KNOWLEDGE
@@ -2549,9 +2608,11 @@ ${currentPerson || "unknown"}
 
 SUPPORTED ACTIONS
 
-PEOPLE
+PEOPLE:
 - list_people
 - delete_person
+- confirm_delete_person
+- cancel_delete_person
 - rename_person
 
 VOLUME
@@ -2724,7 +2785,7 @@ Return ONLY valid JSON using exactly this structure:
 
 {
   "handled": true,
-  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+  "action": "none|list_people|delete_person|confirm_delete_person|cancel_delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
   "language": "BCP-47-style language code or unknown",
   "parameters": {
     "name": null,
