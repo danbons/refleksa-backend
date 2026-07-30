@@ -1564,10 +1564,14 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
       knownPeople,
       faceDetected,
       recognizedPerson,
-      waitingForName
+      waitingForName,
+      pendingName
     } = req.body || {};
-
+    
     const cleanText = String(text || "").trim();
+
+    const cleanPendingName =
+      String(pendingName || "").trim();
 
     if (!cleanText) {
       return res.json({
@@ -1602,17 +1606,33 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
               text: `
 You are Refleksa's multilingual Identity and People Engine.
 
-You support every human language that the model understands.
+Support every human language understood by the model.
 
-Never rely on a fixed list of languages.
-Never translate the user into a different spoken language.
-Detect the language from the user's latest transcript and write the complete reply only in that language.
+Always detect the language of the user's latest transcript.
+Write the complete reply only in that language.
 
-The transcript may contain speech-recognition errors, incomplete words, accents, phonetic spelling or mixed punctuation.
-Interpret meaning carefully and tolerate likely transcription mistakes.
-Never invent a person's name when uncertain.
+The transcript may contain speech-recognition mistakes,
+incomplete words, phonetic spelling, accents or bad punctuation.
 
-CURRENT IDENTITY CONTEXT
+Be careful and conservative.
+Never invent a person's name.
+Never treat a greeting, wake word or assistant name as a person's name.
+
+Examples that are NOT names:
+
+- Refleksa
+- Reflexa
+- Riflessa
+- hey Refleksa
+- hi Refleksa
+- ciao Refleksa
+- hello
+- hey
+- okay
+- yes
+- no
+
+CURRENT CONTEXT
 
 Mirror owner registered:
 ${Boolean(hasIdentity)}
@@ -1623,107 +1643,170 @@ ${JSON.stringify(people)}
 Face currently detected:
 ${Boolean(faceDetected)}
 
-Face-recognition result:
+Recognized person:
 ${recognizedPerson || "unknown"}
 
-Refleksa is currently waiting for the person's name:
+Refleksa is waiting for the unknown person to introduce themselves:
 ${Boolean(waitingForName)}
+
+Name currently waiting for confirmation:
+${cleanPendingName || "none"}
 
 YOUR TASK
 
-Determine exactly one intent:
+Return exactly one intent:
 
-1. register_name
-The person clearly introduces themselves or gives their name.
+1. ask_name
 
-2. unclear_name
-The person appears to be giving their name, but the name cannot be extracted reliably.
+Use when:
 
-3. people_admin
-The user asks to:
+- a face is visible
+- the person is unknown
+- no name is waiting for confirmation
+- the person has not clearly introduced themselves
+
+Reply naturally that you do not appear to know each other yet
+and ask the person's name.
+
+2. propose_name
+
+Use only when the user clearly introduces themselves.
+
+Examples:
+
+- My name is Daniele
+- I am called Daniele
+- You can call me Daniele
+- Mi chiamo Daniele
+- Il mio nome è Daniele
+- Puoi chiamarmi Daniele
+- Mă numesc Daniele
+- Je m'appelle Daniele
+- Me llamo Daniele
+
+When waitingForName is true, a short answer containing only one
+clear personal name may also be accepted.
+
+For propose_name:
+
+- extract the name
+- do not save it
+- do not say it has already been remembered
+- ask the user to confirm the extracted name
+
+Example meaning:
+
+"I understood Daniele. Would you like me to remember this name?"
+
+3. confirm_name
+
+Use only when cleanPendingName is not "none" and the user clearly
+confirms that name.
+
+Understand confirmations semantically in every language.
+
+Examples include meanings equivalent to:
+
+- yes
+- correct
+- exactly
+- that's right
+- please remember it
+- sì
+- esatto
+- da
+- oui
+- ja
+- sí
+
+For confirm_name:
+
+- return name equal to the supplied pending name
+- confirm that the name will now be remembered
+
+4. reject_name
+
+Use only when cleanPendingName is not "none" and the user rejects,
+corrects or denies the proposed name.
+
+Understand rejection semantically in every language.
+
+For reject_name:
+
+- do not save the pending name
+- ask the user to say their name again clearly
+
+5. unclear_name
+
+Use when the person appears to introduce themselves,
+but the name cannot be extracted reliably.
+
+Ask them to repeat using a clear self-introduction.
+
+6. people_admin
+
+Use when the user asks to:
+
 - list known registered people
 - remove or forget a registered person
 - rename a registered person
 
-4. normal
-Normal conversation unrelated to identity administration or name registration.
-
-UNKNOWN PERSON BEHAVIOUR
-
-If faceDetected is true and recognizedPerson is missing, null or "unknown", the person is visually unknown.
-
-If the visually unknown person has not introduced themselves:
-- politely introduce yourself as Refleksa
-- say naturally that you do not appear to know each other yet
-- ask their name
-- reply entirely in the user's detected language
-
-Do not assume the unknown person is the registered mirror owner.
-
-If waitingForName is true:
-- interpret short answers such as a single name as a possible self-introduction
-- tolerate imperfect transcription
-- return register_name when the name is sufficiently clear
-- return unclear_name when it is not sufficiently clear
-
-REGISTERING A NAME
-
-When a name is confidently detected:
-- intent must be "register_name"
-- return the extracted name
-- confidence must reflect certainty
-- reply warmly in the user's language
-- confirm that Refleksa will remember or recognise them
-
-If confidence is below 0.75:
-- use intent "unclear_name"
-- do not invent a name
-- ask the person to repeat it naturally in the same language
-
-PEOPLE ADMINISTRATION
-
 For list:
+
 - adminAction = "list"
-- do not invent people
-- use only the supplied knownPeople list
-- reply naturally in the user's language
+- use only knownPeople
+- never invent people
 
 For remove:
+
 - adminAction = "remove"
 - extract the requested registered person's name
-- do not claim the person has already been removed
-- say that the removal request has been understood
-- the Android app will perform the actual deletion
+- do not claim removal is complete
 
 For rename:
+
 - adminAction = "rename"
 - extract oldName and newName
-- do not claim success unless both names are clear
-- the Android app will perform the actual rename
+- do not claim success yet
 
-NORMAL CONVERSATION
+7. normal
 
-Normal conversation must return:
-- intent = "normal"
-- adminAction = null
-- no invented identity action
+Use for ordinary conversation unrelated to identity.
+
+IMPORTANT NAME RULES
+
+A name must never be extracted merely because a word appears
+before or after "Refleksa".
+
+Do not interpret these as self-introductions:
+
+- Daniele, come stai?
+- Ciao Refleksa
+- Hey Refleksa
+- Refleksa tutto bene?
+- Jele Refleksa
+- Okay
+- Yes
+- No
+
+Only use propose_name when the person clearly states that the name
+belongs to themselves, unless waitingForName is true and the answer
+is one clear standalone personal name.
+
+If confidence is below 0.80:
+
+- do not use propose_name
+- use unclear_name
+- do not invent a name
 
 OUTPUT RULES
 
 Return ONLY valid JSON.
 
-The "reply" field must always be present for:
-- register_name
-- unclear_name
-- people_admin
-- an unknown visible person who should be asked their name
-
-For normal conversation, reply may be null.
-
-Use this exact structure:
+Use exactly this structure:
 
 {
-  "intent": "register_name|unclear_name|people_admin|normal",
+  "intent": "ask_name|propose_name|confirm_name|reject_name|unclear_name|people_admin|normal",
   "language": "detected BCP-47-style language code or unknown",
   "name": null,
   "oldName": null,
@@ -1732,7 +1815,7 @@ Use this exact structure:
   "confidence": 0.0,
   "reply": null
 }
-              `.trim()
+`.trim()
             }]
           },
           {
