@@ -2088,6 +2088,8 @@ SUPPORTED COMMAND ACTIONS
 PEOPLE:
 - list_people
 - delete_person
+- confirm_delete_person
+- cancel_delete_person
 - rename_person
 
 VOLUME:
@@ -2367,8 +2369,7 @@ Return ONLY valid JSON using exactly this structure:
 
 {
   "route": "normal|command|knowledge",
-  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
-  "knowledgeIntent": "none|save_object|find_object",
+"action": "none|list_people|delete_person|confirm_delete_person|cancel_delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",  "knowledgeIntent": "none|save_object|find_object",
   "language": "BCP-47-style language code or unknown",
   "parameters": {
     "name": null,
@@ -2441,16 +2442,6 @@ try {
     output
   });
 
-  console.log("UNIFIED ROUTER OUTPUT:", {
-  text: cleanText,
-  pendingDeletePersonName: safePendingDeletePersonName || null,
-  route: parsed.route,
-  action: parsed.action,
-  language: parsed.language,
-  parameters: parsed.parameters,
-  confidence: parsed.confidence
-});
-
   return res.json(emptyResult);
 }
 
@@ -2461,31 +2452,33 @@ try {
     ]);
 
     const validActions = new Set([
-      "none",
-      "list_people",
-      "delete_person",
-      "rename_person",
-      "volume_up",
-      "volume_down",
-      "volume_max",
-      "volume_min",
-      "volume_mute",
-      "volume_normal",
-      "open_youtube",
-      "open_spotify",
-      "open_chrome",
-      "open_calendar",
-      "open_settings",
-      "standby",
-      "go_home",
-      "stop_speaking",
-      "add_reminder",
-      "remove_reminder",
-      "clear_reminders",
-      "list_reminders",
-      "get_time",
-      "get_date"
-    ]);
+  "none",
+  "list_people",
+  "delete_person",
+  "confirm_delete_person",
+  "cancel_delete_person",
+  "rename_person",
+  "volume_up",
+  "volume_down",
+  "volume_max",
+  "volume_min",
+  "volume_mute",
+  "volume_normal",
+  "open_youtube",
+  "open_spotify",
+  "open_chrome",
+  "open_calendar",
+  "open_settings",
+  "standby",
+  "go_home",
+  "stop_speaking",
+  "add_reminder",
+  "remove_reminder",
+  "clear_reminders",
+  "list_reminders",
+  "get_time",
+  "get_date"
+]);
 
     const validKnowledgeIntents = new Set([
       "none",
@@ -2528,24 +2521,33 @@ try {
       }
     }
 
-    return res.json({
-      route,
-      action,
-      knowledgeIntent,
-      language: parsed.language || "unknown",
-      parameters: {
-        name: parsed.parameters?.name || null,
-        oldName: parsed.parameters?.oldName || null,
-        newName: parsed.parameters?.newName || null,
-        title: parsed.parameters?.title || null,
-        date: parsed.parameters?.date || null,
-        time: parsed.parameters?.time || null,
-        object: parsed.parameters?.object || null,
-        location: parsed.parameters?.location || null,
-        room: parsed.parameters?.room || null
-      },
-      confidence: Number(parsed.confidence) || 0
-    });
+    const finalResult = {
+  route,
+  action,
+  knowledgeIntent,
+  language: parsed.language || "unknown",
+  parameters: {
+    name: parsed.parameters?.name || null,
+    oldName: parsed.parameters?.oldName || null,
+    newName: parsed.parameters?.newName || null,
+    title: parsed.parameters?.title || null,
+    date: parsed.parameters?.date || null,
+    time: parsed.parameters?.time || null,
+    object: parsed.parameters?.object || null,
+    location: parsed.parameters?.location || null,
+    room: parsed.parameters?.room || null
+  },
+  confidence: Number(parsed.confidence) || 0
+};
+
+console.log("UNIFIED ROUTER OUTPUT:", {
+  text: cleanText,
+  pendingDeletePersonName:
+    safePendingDeletePersonName || null,
+  ...finalResult
+});
+
+return res.json(finalResult);
 
   } catch (err) {
     console.error("ROUTE ANALYZE ERROR:", err);
