@@ -48,7 +48,7 @@ const GLOBAL_KILL_SWITCH = false;
 const prototypeDevices = [
   { deviceId: "9640400020f1bae8", partner: "daniele", enabled: false, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "be589d0c8eb5346f", partner: "daniele", enabled: false, expiresAt: "2099-05-15T23:59:59Z" },
-  { deviceId: "58cc2f1b34e996b6", partner: "danRK3588", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
+  { deviceId: "58cc2f1b34e996b6", partner: "mirroh-ai", enabled: false, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "8f2d451cfa6ff7a2", partner: "mirroh-ai", enabled: false, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "5d7c6ca446311c86", partner: "mirroh-ai", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
   { deviceId: "7d83688f63fde1da", partner: "danmirror", enabled: true, expiresAt: "2099-05-15T23:59:59Z" },
@@ -1564,14 +1564,10 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
       knownPeople,
       faceDetected,
       recognizedPerson,
-      waitingForName,
-      pendingName
+      waitingForName
     } = req.body || {};
-    
-    const cleanText = String(text || "").trim();
 
-    const cleanPendingName =
-      String(pendingName || "").trim();
+    const cleanText = String(text || "").trim();
 
     if (!cleanText) {
       return res.json({
@@ -1606,33 +1602,17 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
               text: `
 You are Refleksa's multilingual Identity and People Engine.
 
-Support every human language understood by the model.
+You support every human language that the model understands.
 
-Always detect the language of the user's latest transcript.
-Write the complete reply only in that language.
+Never rely on a fixed list of languages.
+Never translate the user into a different spoken language.
+Detect the language from the user's latest transcript and write the complete reply only in that language.
 
-The transcript may contain speech-recognition mistakes,
-incomplete words, phonetic spelling, accents or bad punctuation.
+The transcript may contain speech-recognition errors, incomplete words, accents, phonetic spelling or mixed punctuation.
+Interpret meaning carefully and tolerate likely transcription mistakes.
+Never invent a person's name when uncertain.
 
-Be careful and conservative.
-Never invent a person's name.
-Never treat a greeting, wake word or assistant name as a person's name.
-
-Examples that are NOT names:
-
-- Refleksa
-- Reflexa
-- Riflessa
-- hey Refleksa
-- hi Refleksa
-- ciao Refleksa
-- hello
-- hey
-- okay
-- yes
-- no
-
-CURRENT CONTEXT
+CURRENT IDENTITY CONTEXT
 
 Mirror owner registered:
 ${Boolean(hasIdentity)}
@@ -1643,170 +1623,107 @@ ${JSON.stringify(people)}
 Face currently detected:
 ${Boolean(faceDetected)}
 
-Recognized person:
+Face-recognition result:
 ${recognizedPerson || "unknown"}
 
-Refleksa is waiting for the unknown person to introduce themselves:
+Refleksa is currently waiting for the person's name:
 ${Boolean(waitingForName)}
-
-Name currently waiting for confirmation:
-${cleanPendingName || "none"}
 
 YOUR TASK
 
-Return exactly one intent:
+Determine exactly one intent:
 
-1. ask_name
+1. register_name
+The person clearly introduces themselves or gives their name.
 
-Use when:
+2. unclear_name
+The person appears to be giving their name, but the name cannot be extracted reliably.
 
-- a face is visible
-- the person is unknown
-- no name is waiting for confirmation
-- the person has not clearly introduced themselves
-
-Reply naturally that you do not appear to know each other yet
-and ask the person's name.
-
-2. propose_name
-
-Use only when the user clearly introduces themselves.
-
-Examples:
-
-- My name is Daniele
-- I am called Daniele
-- You can call me Daniele
-- Mi chiamo Daniele
-- Il mio nome è Daniele
-- Puoi chiamarmi Daniele
-- Mă numesc Daniele
-- Je m'appelle Daniele
-- Me llamo Daniele
-
-When waitingForName is true, a short answer containing only one
-clear personal name may also be accepted.
-
-For propose_name:
-
-- extract the name
-- do not save it
-- do not say it has already been remembered
-- ask the user to confirm the extracted name
-
-Example meaning:
-
-"I understood Daniele. Would you like me to remember this name?"
-
-3. confirm_name
-
-Use only when cleanPendingName is not "none" and the user clearly
-confirms that name.
-
-Understand confirmations semantically in every language.
-
-Examples include meanings equivalent to:
-
-- yes
-- correct
-- exactly
-- that's right
-- please remember it
-- sì
-- esatto
-- da
-- oui
-- ja
-- sí
-
-For confirm_name:
-
-- return name equal to the supplied pending name
-- confirm that the name will now be remembered
-
-4. reject_name
-
-Use only when cleanPendingName is not "none" and the user rejects,
-corrects or denies the proposed name.
-
-Understand rejection semantically in every language.
-
-For reject_name:
-
-- do not save the pending name
-- ask the user to say their name again clearly
-
-5. unclear_name
-
-Use when the person appears to introduce themselves,
-but the name cannot be extracted reliably.
-
-Ask them to repeat using a clear self-introduction.
-
-6. people_admin
-
-Use when the user asks to:
-
+3. people_admin
+The user asks to:
 - list known registered people
 - remove or forget a registered person
 - rename a registered person
 
-For list:
+4. normal
+Normal conversation unrelated to identity administration or name registration.
 
+UNKNOWN PERSON BEHAVIOUR
+
+If faceDetected is true and recognizedPerson is missing, null or "unknown", the person is visually unknown.
+
+If the visually unknown person has not introduced themselves:
+- politely introduce yourself as Refleksa
+- say naturally that you do not appear to know each other yet
+- ask their name
+- reply entirely in the user's detected language
+
+Do not assume the unknown person is the registered mirror owner.
+
+If waitingForName is true:
+- interpret short answers such as a single name as a possible self-introduction
+- tolerate imperfect transcription
+- return register_name when the name is sufficiently clear
+- return unclear_name when it is not sufficiently clear
+
+REGISTERING A NAME
+
+When a name is confidently detected:
+- intent must be "register_name"
+- return the extracted name
+- confidence must reflect certainty
+- reply warmly in the user's language
+- confirm that Refleksa will remember or recognise them
+
+If confidence is below 0.75:
+- use intent "unclear_name"
+- do not invent a name
+- ask the person to repeat it naturally in the same language
+
+PEOPLE ADMINISTRATION
+
+For list:
 - adminAction = "list"
-- use only knownPeople
-- never invent people
+- do not invent people
+- use only the supplied knownPeople list
+- reply naturally in the user's language
 
 For remove:
-
 - adminAction = "remove"
 - extract the requested registered person's name
-- do not claim removal is complete
+- do not claim the person has already been removed
+- say that the removal request has been understood
+- the Android app will perform the actual deletion
 
 For rename:
-
 - adminAction = "rename"
 - extract oldName and newName
-- do not claim success yet
+- do not claim success unless both names are clear
+- the Android app will perform the actual rename
 
-7. normal
+NORMAL CONVERSATION
 
-Use for ordinary conversation unrelated to identity.
-
-IMPORTANT NAME RULES
-
-A name must never be extracted merely because a word appears
-before or after "Refleksa".
-
-Do not interpret these as self-introductions:
-
-- Daniele, come stai?
-- Ciao Refleksa
-- Hey Refleksa
-- Refleksa tutto bene?
-- Jele Refleksa
-- Okay
-- Yes
-- No
-
-Only use propose_name when the person clearly states that the name
-belongs to themselves, unless waitingForName is true and the answer
-is one clear standalone personal name.
-
-If confidence is below 0.80:
-
-- do not use propose_name
-- use unclear_name
-- do not invent a name
+Normal conversation must return:
+- intent = "normal"
+- adminAction = null
+- no invented identity action
 
 OUTPUT RULES
 
 Return ONLY valid JSON.
 
-Use exactly this structure:
+The "reply" field must always be present for:
+- register_name
+- unclear_name
+- people_admin
+- an unknown visible person who should be asked their name
+
+For normal conversation, reply may be null.
+
+Use this exact structure:
 
 {
-  "intent": "ask_name|propose_name|confirm_name|reject_name|unclear_name|people_admin|normal",
+  "intent": "register_name|unclear_name|people_admin|normal",
   "language": "detected BCP-47-style language code or unknown",
   "name": null,
   "oldName": null,
@@ -1815,7 +1732,7 @@ Use exactly this structure:
   "confidence": 0.0,
   "reply": null
 }
-`.trim()
+              `.trim()
             }]
           },
           {
@@ -1949,29 +1866,12 @@ app.post("/route/analyze", requirePrototypeToken, async (req, res) => {
       text,
       knownPeople,
       currentPerson,
-      pendingDeletePersonName,
       currentDate,
       currentTime,
       timeZone
     } = req.body || {};
 
     const cleanText = String(text || "").trim();
-
-    const safePendingDeletePersonName =
-      String(pendingDeletePersonName || "").trim();
-
-    console.log("UNIFIED ROUTER INPUT:", {
-  text: cleanText,
-  knownPeople: Array.isArray(knownPeople)
-    ? knownPeople
-    : [],
-  currentPerson: currentPerson || null,
-  pendingDeletePersonName:
-    safePendingDeletePersonName || null,
-  currentDate,
-  currentTime,
-  timeZone
-});
 
     const safeTimeZone =
       String(timeZone || "Europe/London").trim();
@@ -2088,8 +1988,6 @@ SUPPORTED COMMAND ACTIONS
 PEOPLE:
 - list_people
 - delete_person
-- confirm_delete_person
-- cancel_delete_person
 - rename_person
 
 VOLUME:
@@ -2200,61 +2098,6 @@ Date rules:
 For command route:
 - action must not be "none"
 - knowledgeIntent must be "none"
-
-PENDING PERSON DELETION
-
-Person currently waiting for deletion confirmation:
-${safePendingDeletePersonName || "none"}
-
-When this value is not "none", interpret the latest transcript primarily
-as a confirmation, rejection or correction of this pending deletion.
-
-Understand confirmations and rejections semantically in every language,
-including short replies and likely speech-recognition mistakes.
-
-Examples of confirmation meanings:
-- yes
-- yes, do it
-- confirm
-- correct
-- certainly
-- sì
-- certo
-- confermo
-- esatto
-- da
-- oui
-- ja
-- sí
-
-When confirmed:
-- route = "command"
-- action = "confirm_delete_person"
-- parameters.name = the pending person name
-
-Examples of rejection meanings:
-- no
-- cancel
-- don't do it
-- leave them
-- no, I changed my mind
-- annulla
-- no
-- lascia stare
-- non cancellarlo
-- nu
-- non
-- nein
-
-When rejected:
-- route = "command"
-- action = "cancel_delete_person"
-- parameters.name = the pending person name
-
-While deletion confirmation is pending:
-- never interpret "yes" as normal conversation
-- never start identity onboarding
-- never delete a different person unless the user clearly gives a correction
 
 ==================================================
 ROUTE: KNOWLEDGE
@@ -2369,7 +2212,8 @@ Return ONLY valid JSON using exactly this structure:
 
 {
   "route": "normal|command|knowledge",
-"action": "none|list_people|delete_person|confirm_delete_person|cancel_delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",  "knowledgeIntent": "none|save_object|find_object",
+  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+  "knowledgeIntent": "none|save_object|find_object",
   "language": "BCP-47-style language code or unknown",
   "parameters": {
     "name": null,
@@ -2427,23 +2271,12 @@ Return ONLY valid JSON using exactly this structure:
 
     let parsed;
 
-try {
-  const cleanOutput = String(output || "")
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  parsed = JSON.parse(cleanOutput);
-
-} catch (error) {
-  console.error("ROUTE RESULT JSON ERROR:", {
-    error: String(error),
-    output
-  });
-
-  return res.json(emptyResult);
-}
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      console.error("ROUTE RESULT JSON ERROR:", output);
+      return res.json(emptyResult);
+    }
 
     const validRoutes = new Set([
       "normal",
@@ -2452,33 +2285,31 @@ try {
     ]);
 
     const validActions = new Set([
-  "none",
-  "list_people",
-  "delete_person",
-  "confirm_delete_person",
-  "cancel_delete_person",
-  "rename_person",
-  "volume_up",
-  "volume_down",
-  "volume_max",
-  "volume_min",
-  "volume_mute",
-  "volume_normal",
-  "open_youtube",
-  "open_spotify",
-  "open_chrome",
-  "open_calendar",
-  "open_settings",
-  "standby",
-  "go_home",
-  "stop_speaking",
-  "add_reminder",
-  "remove_reminder",
-  "clear_reminders",
-  "list_reminders",
-  "get_time",
-  "get_date"
-]);
+      "none",
+      "list_people",
+      "delete_person",
+      "rename_person",
+      "volume_up",
+      "volume_down",
+      "volume_max",
+      "volume_min",
+      "volume_mute",
+      "volume_normal",
+      "open_youtube",
+      "open_spotify",
+      "open_chrome",
+      "open_calendar",
+      "open_settings",
+      "standby",
+      "go_home",
+      "stop_speaking",
+      "add_reminder",
+      "remove_reminder",
+      "clear_reminders",
+      "list_reminders",
+      "get_time",
+      "get_date"
+    ]);
 
     const validKnowledgeIntents = new Set([
       "none",
@@ -2521,33 +2352,24 @@ try {
       }
     }
 
-    const finalResult = {
-  route,
-  action,
-  knowledgeIntent,
-  language: parsed.language || "unknown",
-  parameters: {
-    name: parsed.parameters?.name || null,
-    oldName: parsed.parameters?.oldName || null,
-    newName: parsed.parameters?.newName || null,
-    title: parsed.parameters?.title || null,
-    date: parsed.parameters?.date || null,
-    time: parsed.parameters?.time || null,
-    object: parsed.parameters?.object || null,
-    location: parsed.parameters?.location || null,
-    room: parsed.parameters?.room || null
-  },
-  confidence: Number(parsed.confidence) || 0
-};
-
-console.log("UNIFIED ROUTER OUTPUT:", {
-  text: cleanText,
-  pendingDeletePersonName:
-    safePendingDeletePersonName || null,
-  ...finalResult
-});
-
-return res.json(finalResult);
+    return res.json({
+      route,
+      action,
+      knowledgeIntent,
+      language: parsed.language || "unknown",
+      parameters: {
+        name: parsed.parameters?.name || null,
+        oldName: parsed.parameters?.oldName || null,
+        newName: parsed.parameters?.newName || null,
+        title: parsed.parameters?.title || null,
+        date: parsed.parameters?.date || null,
+        time: parsed.parameters?.time || null,
+        object: parsed.parameters?.object || null,
+        location: parsed.parameters?.location || null,
+        room: parsed.parameters?.room || null
+      },
+      confidence: Number(parsed.confidence) || 0
+    });
 
   } catch (err) {
     console.error("ROUTE ANALYZE ERROR:", err);
@@ -2644,11 +2466,9 @@ ${currentPerson || "unknown"}
 
 SUPPORTED ACTIONS
 
-PEOPLE:
+PEOPLE
 - list_people
 - delete_person
-- confirm_delete_person
-- cancel_delete_person
 - rename_person
 
 VOLUME
@@ -2821,7 +2641,7 @@ Return ONLY valid JSON using exactly this structure:
 
 {
   "handled": true,
-  "action": "none|list_people|delete_person|confirm_delete_person|cancel_delete_person|rename_person|volume_up|volume_down|volume_max|volume_min|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
+  "action": "none|list_people|delete_person|rename_person|volume_up|volume_down|volume_max|volume_mute|volume_normal|open_youtube|open_spotify|open_chrome|open_calendar|open_settings|standby|go_home|stop_speaking|add_reminder|remove_reminder|clear_reminders|list_reminders|get_time|get_date",
   "language": "BCP-47-style language code or unknown",
   "parameters": {
     "name": null,
