@@ -1960,6 +1960,19 @@ app.post("/route/analyze", requirePrototypeToken, async (req, res) => {
     const safePendingDeletePersonName =
       String(pendingDeletePersonName || "").trim();
 
+    console.log("UNIFIED ROUTER INPUT:", {
+  text: cleanText,
+  knownPeople: Array.isArray(knownPeople)
+    ? knownPeople
+    : [],
+  currentPerson: currentPerson || null,
+  pendingDeletePersonName:
+    safePendingDeletePersonName || null,
+  currentDate,
+  currentTime,
+  timeZone
+});
+
     const safeTimeZone =
       String(timeZone || "Europe/London").trim();
 
@@ -2413,12 +2426,33 @@ Return ONLY valid JSON using exactly this structure:
 
     let parsed;
 
-    try {
-      parsed = JSON.parse(output);
-    } catch {
-      console.error("ROUTE RESULT JSON ERROR:", output);
-      return res.json(emptyResult);
-    }
+try {
+  const cleanOutput = String(output || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  parsed = JSON.parse(cleanOutput);
+
+} catch (error) {
+  console.error("ROUTE RESULT JSON ERROR:", {
+    error: String(error),
+    output
+  });
+
+  console.log("UNIFIED ROUTER OUTPUT:", {
+  text: cleanText,
+  pendingDeletePersonName: safePendingDeletePersonName || null,
+  route: parsed.route,
+  action: parsed.action,
+  language: parsed.language,
+  parameters: parsed.parameters,
+  confidence: parsed.confidence
+});
+
+  return res.json(emptyResult);
+}
 
     const validRoutes = new Set([
       "normal",
