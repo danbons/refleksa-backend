@@ -1564,15 +1564,59 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
       knownPeople,
       faceDetected,
       recognizedPerson,
-      waitingForName
+
+      // Campo precedente: mantenuto temporaneamente
+      // per compatibilità con le vecchie versioni dell'APK.
+      waitingForName,
+
+      // Nuovo flusso onboarding.
+      onboardingState,
+      pendingName,
+      conversationLanguage
     } = req.body || {};
 
     const cleanText = String(text || "").trim();
 
+    const cleanOnboardingState =
+      String(onboardingState || "none")
+        .trim()
+        .toLowerCase();
+
+    const cleanPendingName =
+      String(pendingName || "")
+        .trim();
+
+    const cleanConversationLanguage =
+      String(conversationLanguage || "")
+        .trim()
+        .toLowerCase();
+
+    const validOnboardingStates = [
+      "none",
+      "waiting_for_name",
+      "waiting_for_confirmation"
+    ];
+
+    const safeOnboardingState =
+      validOnboardingStates.includes(cleanOnboardingState)
+        ? cleanOnboardingState
+        : "none";
+
+    /*
+     * Finché l'APK non viene aggiornato, onboardingState non sarà inviato.
+     * In quel caso il server mantiene il comportamento precedente.
+     *
+     * Questo evita che la vecchia APK salvi immediatamente un nome
+     * dopo che il server ha soltanto chiesto conferma.
+     */
+    const newOnboardingEnabled =
+      safeOnboardingState === "waiting_for_name" ||
+      safeOnboardingState === "waiting_for_confirmation";
+
     if (!cleanText) {
       return res.json({
         intent: "normal",
-        language: "unknown",
+        language: cleanConversationLanguage || "unknown",
         name: null,
         oldName: null,
         newName: null,
@@ -1582,37 +1626,55 @@ app.post("/identity/analyze", requirePrototypeToken, async (req, res) => {
       });
     }
 
-    const people = Array.isArray(knownPeople)
-      ? knownPeople.filter(Boolean)
-      : [];
+    const people =
+      Array.isArray(knownPeople)
+        ? knownPeople
+            .map(person => String(person || "").trim())
+            .filter(Boolean)
+        : [];
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MEMORY_MODEL || "gpt-4.1-mini",
-        input: [
-          {
-            role: "system",
-            content: [{
-              type: "input_text",
-              text: `
+    const response = await fetch(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model:
+            process.env.OPENAI_MEMORY_MODEL ||
+            "gpt-4.1-mini",
+
+          input: [
+            {
+              role: "system",
+              content: [
+                {
+                  type: "input_text",
+                  text: `
 You are Refleksa's multilingual Identity and People Engine.
 
-You support every human language that the model understands.
+You support every human language understood by the model.
 
 Never rely on a fixed list of languages.
-Never translate the user into a different spoken language.
-Detect the language from the user's latest transcript and write the complete reply only in that language.
+Never translate the user into an unrelated language.
+Never invent a person's name.
 
-The transcript may contain speech-recognition errors, incomplete words, accents, phonetic spelling or mixed punctuation.
-Interpret meaning carefully and tolerate likely transcription mistakes.
-Never invent a person's name when uncertain.
+The transcript may contain:
+- speech-recognition errors
+- phonetic spelling
+- incorrect alphabets
+- incomplete words
+- accents
+- mixed punctuation
 
+Interpret the transcript using the supplied onboarding context.
+
+==================================================
 CURRENT IDENTITY CONTEXT
+==================================================
 
 Mirror owner registered:
 ${Boolean(hasIdentity)}
@@ -1626,105 +1688,237 @@ ${Boolean(faceDetected)}
 Face-recognition result:
 ${recognizedPerson || "unknown"}
 
-Refleksa is currently waiting for the person's name:
+Legacy waitingForName value:
 ${Boolean(waitingForName)}
 
-YOUR TASK
+New onboarding enabled:
+${newOnboardingEnabled}
 
-Determine exactly one intent:
+Current onboarding state:
+${safeOnboardingState}
+
+Pending name awaiting confirmation:
+${cleanPendingName || "none"}
+
+Current conversation language:
+${cleanConversationLanguage || "unknown"}
+
+==================================================
+LANGUAGE RULES
+==================================================
+
+Reply in the language currently being used by the user.
+
+When Current conversation language is not "unknown",
+prefer that language during onboarding.
+
+A person's name, a short confirmation, or a transcription
+written in an unexpected alphabet must not cause an automatic
+conversation-language change.
+
+For example, if the conversation is Italian and the name
+"Daniele" is transcribed using Cyrillic characters, continue
+replying in Italian.
+
+==================================================
+VALID INTENTS
+==================================================
+
+Return exactly one of these intents:
 
 1. register_name
-The person clearly introduces themselves or gives their name.
 
-2. unclear_name
-The person appears to be giving their name, but the name cannot be extracted reliably.
+The user clearly provides their name.
 
-3. people_admin
+Examples:
+- "Daniele"
+- "Sono Daniele"
+- "Mi chiamo Daniele"
+- "Il mio nome è Daniele"
+- "I am Daniel"
+- "My name is Daniel"
+- equivalent expressions in any language
+
+2. confirm_name
+
+Use only when:
+- onboarding state is "waiting_for_confirmation"
+- pending name is available
+- the user clearly confirms
+
+Examples include natural equivalents of:
+- yes
+- correct
+- confirm
+- that's right
+- sure
+- okay
+
+3. reject_name
+
+Use only when:
+- onboarding state is "waiting_for_confirmation"
+- the user clearly rejects or corrects the proposed name
+
+Examples include natural equivalents of:
+- no
+- incorrect
+- wrong
+- that is not my name
+- you misunderstood
+
+4. unclear_name
+
+The user appears to be giving a name, but the name cannot
+be extracted reliably.
+
+5. unclear_confirmation
+
+Use only during "waiting_for_confirmation" when the reply
+does not clearly confirm or reject the pending name.
+
+6. people_admin
+
 The user asks to:
 - list known registered people
 - remove or forget a registered person
 - rename a registered person
 
-4. normal
-Normal conversation unrelated to identity administration or name registration.
+7. normal
 
+Normal conversation unrelated to identity registration
+or people administration.
+
+==================================================
 UNKNOWN PERSON BEHAVIOUR
+==================================================
 
-If faceDetected is true and recognizedPerson is missing, null or "unknown", the person is visually unknown.
+If:
+- a face is detected
+- recognizedPerson is missing, null or "unknown"
+- onboarding state is "none"
+- the person has not introduced themselves
 
-If the visually unknown person has not introduced themselves:
+Then:
 - politely introduce yourself as Refleksa
-- say naturally that you do not appear to know each other yet
+- say naturally that you do not appear to know each other
 - ask their name
-- reply entirely in the user's detected language
+- use intent "normal"
+- include the complete spoken reply
 
-Do not assume the unknown person is the registered mirror owner.
+Do not assume that an unknown face belongs to the registered
+mirror owner.
 
-If waitingForName is true:
-- interpret short answers such as a single name as a possible self-introduction
-- tolerate imperfect transcription
-- return register_name when the name is sufficiently clear
-- return unclear_name when it is not sufficiently clear
+==================================================
+WAITING FOR NAME
+==================================================
 
-REGISTERING A NAME
+When onboarding state is "waiting_for_name":
 
-When a name is confidently detected:
-- intent must be "register_name"
+- interpret the transcript as an answer to:
+  "What is your name?"
+- accept a single name
+- accept natural introductions
+- tolerate likely speech-recognition mistakes
+- extract only the person's name
+- preserve the natural spelling when reasonably clear
+
+If the name is clear:
+- intent = "register_name"
 - return the extracted name
 - confidence must reflect certainty
-- reply warmly in the user's language
-- confirm that Refleksa will remember or recognise them
+- do not claim that the profile has already been saved
+- ask the user to confirm the proposed profile name
 
-If confidence is below 0.75:
-- use intent "unclear_name"
-- do not invent a name
-- ask the person to repeat it naturally in the same language
+Example Italian reply:
+"Ho capito Daniele. Vuoi confermare il profilo Daniele?"
 
+The reply must be natural in the conversation language.
+
+If the name is not clear:
+- intent = "unclear_name"
+- name = null
+- ask the user to repeat their name
+- do not invent anything
+
+==================================================
+WAITING FOR CONFIRMATION
+==================================================
+
+When onboarding state is "waiting_for_confirmation":
+
+The pending name is:
+${cleanPendingName || "none"}
+
+Interpret the transcript only as a response to the profile
+confirmation question.
+
+If the user confirms:
+- intent = "confirm_name"
+- name = the pending name
+- do not extract a new name
+- reply naturally that the confirmation was understood
+- do not falsely claim that storage has already completed;
+  Android performs the actual save after receiving this intent
+
+If the user rejects:
+- intent = "reject_name"
+- name = the pending name
+- ask naturally for their name again
+
+If the answer is unclear:
+- intent = "unclear_confirmation"
+- name = the pending name
+- ask clearly whether they want to confirm that name
+
+==================================================
+LEGACY APK COMPATIBILITY
+==================================================
+
+When new onboarding is not enabled and legacy waitingForName
+is true, preserve the previous behaviour:
+
+- detect a supplied name
+- use intent "register_name"
+- return the extracted name
+- reply warmly that Refleksa will remember or recognise them
+
+Do not use confirm_name, reject_name or unclear_confirmation
+in legacy mode.
+
+==================================================
 PEOPLE ADMINISTRATION
+==================================================
 
 For list:
+- intent = "people_admin"
 - adminAction = "list"
-- do not invent people
 - use only the supplied knownPeople list
-- reply naturally in the user's language
+- do not invent people
 
-For remove:
+For removal:
+- intent = "people_admin"
 - adminAction = "remove"
-- extract the requested registered person's name
-- do not claim the person has already been removed
-- say that the removal request has been understood
-- the Android app will perform the actual deletion
+- extract the requested person's name
+- do not claim that deletion already happened
 
 For rename:
+- intent = "people_admin"
 - adminAction = "rename"
 - extract oldName and newName
 - do not claim success unless both names are clear
-- the Android app will perform the actual rename
 
-NORMAL CONVERSATION
-
-Normal conversation must return:
-- intent = "normal"
-- adminAction = null
-- no invented identity action
-
+==================================================
 OUTPUT RULES
+==================================================
 
 Return ONLY valid JSON.
 
-The "reply" field must always be present for:
-- register_name
-- unclear_name
-- people_admin
-- an unknown visible person who should be asked their name
-
-For normal conversation, reply may be null.
-
-Use this exact structure:
+Use exactly this structure:
 
 {
-  "intent": "register_name|unclear_name|people_admin|normal",
-  "language": "detected BCP-47-style language code or unknown",
+  "intent": "register_name|confirm_name|reject_name|unclear_name|unclear_confirmation|people_admin|normal",
+  "language": "BCP-47-style language code or unknown",
   "name": null,
   "oldName": null,
   "newName": null,
@@ -1732,20 +1926,36 @@ Use this exact structure:
   "confidence": 0.0,
   "reply": null
 }
-              `.trim()
-            }]
-          },
-          {
-            role: "user",
-            content: [{
-              type: "input_text",
-              text: cleanText
-            }]
-          }
-        ],
-        max_output_tokens: 260
-      })
-    });
+
+The reply field must be present when Refleksa needs to speak.
+
+For normal conversation unrelated to identity, reply may be null.
+                  `.trim()
+                }
+              ]
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: JSON.stringify({
+                    transcript: cleanText,
+                    onboardingState: safeOnboardingState,
+                    pendingName:
+                      cleanPendingName || null,
+                    conversationLanguage:
+                      cleanConversationLanguage || null
+                  })
+                }
+              ]
+            }
+          ],
+
+          max_output_tokens: 300
+        })
+      }
+    );
 
     const raw = await response.text();
 
@@ -1754,11 +1964,15 @@ Use this exact structure:
     try {
       data = JSON.parse(raw);
     } catch {
-      console.error("IDENTITY OPENAI RESPONSE PARSE ERROR:", raw);
+      console.error(
+        "IDENTITY OPENAI RESPONSE PARSE ERROR:",
+        raw
+      );
 
       return res.json({
         intent: "normal",
-        language: "unknown",
+        language:
+          cleanConversationLanguage || "unknown",
         name: null,
         oldName: null,
         newName: null,
@@ -1769,11 +1983,15 @@ Use this exact structure:
     }
 
     if (!response.ok) {
-      console.error("IDENTITY OPENAI ERROR:", data);
+      console.error(
+        "IDENTITY OPENAI ERROR:",
+        data
+      );
 
       return res.status(response.status).json({
         intent: "normal",
-        language: "unknown",
+        language:
+          cleanConversationLanguage || "unknown",
         name: null,
         oldName: null,
         newName: null,
@@ -1796,11 +2014,15 @@ Use this exact structure:
     try {
       parsed = JSON.parse(output);
     } catch {
-      console.error("IDENTITY RESULT JSON ERROR:", output);
+      console.error(
+        "IDENTITY RESULT JSON ERROR:",
+        output
+      );
 
       parsed = {
         intent: "normal",
-        language: "unknown",
+        language:
+          cleanConversationLanguage || "unknown",
         name: null,
         oldName: null,
         newName: null,
@@ -1810,19 +2032,71 @@ Use this exact structure:
       };
     }
 
+    const allowedIntents = newOnboardingEnabled
+      ? [
+          "register_name",
+          "confirm_name",
+          "reject_name",
+          "unclear_name",
+          "unclear_confirmation",
+          "people_admin",
+          "normal"
+        ]
+      : [
+          "register_name",
+          "unclear_name",
+          "people_admin",
+          "normal"
+        ];
+
+    const safeIntent =
+      allowedIntents.includes(parsed.intent)
+        ? parsed.intent
+        : "normal";
+
+    /*
+     * Durante la conferma il nome autorevole è pendingName,
+     * non un nuovo nome eventualmente inventato dal modello.
+     */
+    const safeName =
+      safeOnboardingState ===
+        "waiting_for_confirmation" &&
+      cleanPendingName
+        ? cleanPendingName
+        : String(parsed.name || "").trim() || null;
+
+    const confidence =
+      Number.isFinite(Number(parsed.confidence))
+        ? Math.max(
+            0,
+            Math.min(1, Number(parsed.confidence))
+          )
+        : 0;
+
     return res.json({
-      intent: parsed.intent || "normal",
-      language: parsed.language || "unknown",
-      name: parsed.name || null,
-      oldName: parsed.oldName || null,
-      newName: parsed.newName || null,
-      adminAction: parsed.adminAction || null,
-      confidence: Number(parsed.confidence) || 0,
-      reply: parsed.reply || null
+      intent: safeIntent,
+      language:
+        parsed.language ||
+        cleanConversationLanguage ||
+        "unknown",
+      name: safeName,
+      oldName:
+        String(parsed.oldName || "").trim() || null,
+      newName:
+        String(parsed.newName || "").trim() || null,
+      adminAction:
+        String(parsed.adminAction || "").trim() ||
+        null,
+      confidence,
+      reply:
+        String(parsed.reply || "").trim() || null
     });
 
   } catch (err) {
-    console.error("IDENTITY ANALYZE ERROR:", err);
+    console.error(
+      "IDENTITY ANALYZE ERROR:",
+      err
+    );
 
     return res.json({
       intent: "normal",
