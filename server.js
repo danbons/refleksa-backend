@@ -603,6 +603,470 @@ JSON shape:
 });
 
 // ===============================
+// VISION PERCEPTION
+// ===============================
+app.post(
+  "/vision/perception",
+  requirePrototypeToken,
+  async (req, res) => {
+    try {
+
+      const {
+        image_base64,
+        recognizedPerson
+      } = req.body || {};
+
+      if (!image_base64) {
+        return res.status(400).json({
+          error: "Missing image_base64"
+        });
+      }
+
+      const dataUrl =
+        image_base64.startsWith("data:image/")
+          ? image_base64
+          : `data:image/jpeg;base64,${image_base64}`;
+
+      const response = await fetch(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+
+            model:
+              process.env.OPENAI_VISION_MODEL ||
+              "gpt-4.1-mini",
+
+            input: [
+              {
+                role: "system",
+
+                content: [{
+                  type: "input_text",
+
+                  text: `
+You are Refleksa's Visual Perception Engine.
+
+Your job is to observe the CURRENT image
+and return useful visual observations for
+Refleksa's Multi-Sensor Situation Engine (MSSE).
+
+This is NOT long-term memory.
+
+Observe what is visually present NOW.
+
+Return ONLY valid JSON.
+
+==================================================
+OBSERVATION TYPES
+==================================================
+
+Use ONLY these types:
+
+OBJECT
+APPEARANCE
+ACTIVITY
+SCENE
+
+==================================================
+OBJECT
+==================================================
+
+Detect any clearly visible useful object.
+
+Do NOT restrict detection to a fixed list.
+
+Examples include, but are not limited to:
+
+phone
+keys
+wallet
+glasses
+mug
+cup
+bottle
+book
+laptop
+tablet
+bag
+handbag
+backpack
+passport
+documents
+remote control
+headphones
+watch
+lipstick
+makeup brush
+hairbrush
+perfume
+jacket
+coat
+shoes
+vinyl record
+food
+plate
+chair
+sofa
+table
+television
+computer
+kitchen appliance
+
+Only report objects you can reasonably see.
+
+==================================================
+APPEARANCE
+==================================================
+
+Report clearly visible, non-sensitive aspects
+of presentation.
+
+Examples:
+
+wearing glasses
+wearing jacket
+wearing coat
+wearing hat
+wearing formal clothes
+wearing casual clothes
+wearing accessories
+makeup visible
+lipstick visible
+hair tied back
+
+Do NOT infer:
+
+race
+ethnicity
+religion
+health conditions
+sexual orientation
+personality
+attractiveness
+mental state
+medical state
+
+Do NOT diagnose emotions.
+
+==================================================
+ACTIVITY
+==================================================
+
+Report actions that are visually supported.
+
+Examples:
+
+holding mug
+drinking
+reading
+using phone
+typing
+working on laptop
+applying lipstick
+brushing hair
+putting on jacket
+removing jacket
+holding keys
+carrying bag
+eating
+preparing food
+watching television
+sitting
+standing
+walking
+
+Prefer directly observable actions.
+
+Do NOT convert observations into hidden intentions.
+
+For example:
+
+keys + bag + jacket
+
+does NOT automatically mean:
+
+"leaving home"
+
+MSSE will infer the higher-level situation.
+
+==================================================
+SCENE
+==================================================
+
+Describe the visible environment when reasonably clear.
+
+Examples:
+
+kitchen
+living room
+bedroom
+bathroom
+office
+hallway
+outdoors
+car
+shop
+restaurant
+
+==================================================
+OUTPUT RULES
+==================================================
+
+Return maximum 12 observations.
+
+Every observation must have:
+
+{
+  "type": "OBJECT|APPEARANCE|ACTIVITY|SCENE",
+  "label": "short normalized English label",
+  "confidence": 0.0,
+  "attributes": {}
+}
+
+Attributes may contain useful visible relationships.
+
+Examples:
+
+{
+  "location": "hand",
+  "room": "kitchen"
+}
+
+{
+  "interaction": "being held"
+}
+
+{
+  "color": "red"
+}
+
+Only include attributes that are reasonably visible.
+
+Use normalized English labels regardless
+of the user's spoken language.
+
+Do not identify a person from the image.
+
+The supplied recognized person name is context
+from Refleksa's separate face-recognition system.
+
+Do not invent observations.
+
+When uncertain, lower confidence.
+
+If nothing useful is visible return:
+
+{
+  "observations": []
+}
+
+Required JSON shape:
+
+{
+  "observations": []
+}
+                  `.trim()
+                }]
+              },
+
+              {
+                role: "user",
+
+                content: [
+                  {
+                    type: "input_text",
+                    text:
+                      `Recognized person: ${
+                        recognizedPerson || "unknown"
+                      }`
+                  },
+
+                  {
+                    type: "input_image",
+                    image_url: dataUrl,
+                    detail: "low"
+                  }
+                ]
+              }
+            ],
+
+            max_output_tokens: 800
+          })
+        }
+      );
+
+      const raw = await response.text();
+
+      let data;
+
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        console.error(
+          "VISION PERCEPTION OPENAI PARSE ERROR:",
+          raw
+        );
+
+        return res.json({
+          observations: []
+        });
+      }
+
+      if (!response.ok) {
+
+        console.error(
+          "VISION PERCEPTION OPENAI ERROR:",
+          data
+        );
+
+        return res.status(response.status).json({
+          observations: []
+        });
+      }
+
+      const output =
+        data.output_text ||
+        data.output
+          ?.flatMap(item => item.content || [])
+          ?.find(part =>
+            part.type === "output_text"
+          )
+          ?.text ||
+        '{"observations":[]}';
+
+      let parsed;
+
+      try {
+        parsed = JSON.parse(output);
+      } catch {
+
+        console.error(
+          "VISION PERCEPTION RESULT JSON ERROR:",
+          output
+        );
+
+        return res.json({
+          observations: []
+        });
+      }
+
+      const allowedTypes =
+        new Set([
+          "OBJECT",
+          "APPEARANCE",
+          "ACTIVITY",
+          "SCENE"
+        ]);
+
+      const observations =
+        Array.isArray(parsed.observations)
+          ? parsed.observations
+              .map(item => {
+
+                const type =
+                  String(item?.type || "")
+                    .trim()
+                    .toUpperCase();
+
+                const label =
+                  String(item?.label || "")
+                    .trim()
+                    .toLowerCase();
+
+                const confidenceRaw =
+                  Number(item?.confidence);
+
+                const confidence =
+                  Number.isFinite(confidenceRaw)
+                    ? Math.max(
+                        0,
+                        Math.min(
+                          1,
+                          confidenceRaw
+                        )
+                      )
+                    : 0;
+
+                const rawAttributes =
+                  item?.attributes &&
+                  typeof item.attributes === "object" &&
+                  !Array.isArray(item.attributes)
+                    ? item.attributes
+                    : {};
+
+                const attributes =
+                  Object.fromEntries(
+                    Object.entries(rawAttributes)
+                      .filter(
+                        ([key, value]) =>
+                          key &&
+                          value !== null &&
+                          value !== undefined
+                      )
+                      .map(
+                        ([key, value]) => [
+                          String(key),
+                          String(value)
+                        ]
+                      )
+                  );
+
+                return {
+                  type,
+                  label,
+                  confidence,
+                  attributes
+                };
+              })
+              .filter(
+                item =>
+                  allowedTypes.has(item.type) &&
+                  item.label &&
+                  item.confidence > 0
+              )
+              .slice(0, 12)
+          : [];
+
+      console.log(
+        "VISION PERCEPTION:",
+        {
+          person:
+            recognizedPerson || "unknown",
+
+          count:
+            observations.length,
+
+          observations
+        }
+      );
+
+      return res.json({
+        observations
+      });
+
+    } catch (err) {
+
+      console.error(
+        "VISION PERCEPTION ERROR:",
+        err
+      );
+
+      return res.json({
+        observations: []
+      });
+    }
+  }
+);
+
+// ===============================
 // WEATHER
 // ===============================
 app.get("/weather", requirePrototypeToken, async (_req, res) => {
