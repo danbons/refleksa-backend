@@ -1099,30 +1099,132 @@ app.get("/weather", requirePrototypeToken, async (_req, res) => {
 // ===============================
 app.get("/news", requirePrototypeToken, async (req, res) => {
   try {
-    const category = req.query.category || "general";
+    const cleanQuery =
+      String(req.query.query || "")
+        .trim();
 
-    const response = await fetch(
-      `https://newsapi.org/v2/top-headlines?country=gb&category=${category}&pageSize=3&apiKey=${process.env.NEWS_API_KEY}`
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("NEWS API ERROR:", data);
-      return res.status(500).send("News API error");
+    if (!cleanQuery) {
+      return res.status(400).json({
+        error: "Missing news query.",
+        query: null,
+        articles: []
+      });
     }
 
-    const articles = (data.articles || [])
-      .map(a => a.title)
-      .filter(Boolean);
+    if (!process.env.NEWS_API_KEY) {
+      console.error("Missing NEWS_API_KEY.");
 
-    res.json({ headlines: articles });
+      return res.status(500).json({
+        error: "News API configuration error.",
+        query: cleanQuery,
+        articles: []
+      });
+    }
+
+    const params =
+      new URLSearchParams({
+        q: cleanQuery,
+        sortBy: "publishedAt",
+        pageSize: "5",
+        apiKey: process.env.NEWS_API_KEY
+      });
+
+    const response =
+      await fetch(
+        `https://newsapi.org/v2/everything?${params.toString()}`
+      );
+
+    const data =
+      await response.json();
+
+    if (
+      !response.ok ||
+      data.status === "error"
+    ) {
+      console.error(
+        "NEWS API ERROR:",
+        data
+      );
+
+      return res.status(502).json({
+        error:
+          data.message ||
+          "News API error",
+        query: cleanQuery,
+        articles: []
+      });
+    }
+
+    const articles =
+      (data.articles || [])
+        .filter(article => {
+          const title =
+            String(
+              article?.title || ""
+            ).trim();
+
+          return (
+            title &&
+            title !== "[Removed]"
+          );
+        })
+        .slice(0, 5)
+        .map(article => ({
+          title:
+            String(
+              article.title || ""
+            ).trim(),
+
+          description:
+            String(
+              article.description || ""
+            ).trim() || null,
+
+          source:
+            String(
+              article.source?.name ||
+              ""
+            ).trim() || "Unknown source",
+
+          publishedAt:
+            article.publishedAt || null
+        }));
+
+    console.log(
+      "NEWS SEARCH:",
+      {
+        query: cleanQuery,
+        totalResults:
+          Number(
+            data.totalResults
+          ) || 0,
+        returned:
+          articles.length
+      }
+    );
+
+    return res.json({
+      query: cleanQuery,
+      totalResults:
+        Number(
+          data.totalResults
+        ) || 0,
+      articles
+    });
+
   } catch (err) {
-    console.error("NEWS ERROR:", err);
-    res.status(500).send("News error");
+
+    console.error(
+      "NEWS ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      error: "News error",
+      articles: []
+    });
   }
 });
-
 // ===============================
 // TIME
 // ===============================
