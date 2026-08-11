@@ -1097,11 +1097,227 @@ app.get("/weather", requirePrototypeToken, async (_req, res) => {
 // ===============================
 // NEWS
 // ===============================
+let worldNewsCache = {
+  expiresAt: 0,
+  articles: []
+};
+
+const WORLD_NEWS_CACHE_MS =
+  15 * 60 * 1000;
+
 app.get("/news", requirePrototypeToken, async (req, res) => {
   try {
     const cleanQuery =
       String(req.query.query || "")
         .trim();
+
+    const requestedScope =
+  String(req.query.scope || "")
+    .trim()
+    .toLowerCase();
+
+    // ===============================
+// WORLD NEWS
+// ===============================
+if (requestedScope === "world") {
+
+  const now = Date.now();
+
+  /*
+   * Reuse the latest world briefing for
+   * a short period so one user request
+   * does not repeatedly consume many
+   * NewsAPI calls.
+   */
+  if (
+    worldNewsCache.expiresAt > now &&
+    worldNewsCache.articles.length > 0
+  ) {
+    return res.json({
+      scope: "world",
+      cached: true,
+      articles:
+        worldNewsCache.articles
+    });
+  }
+
+  const countries = [
+    "us", // North America
+    "gb", // UK / Europe
+    "de", // continental Europe
+    "in", // South Asia
+    "jp", // East Asia
+    "br", // South America
+    "za", // Africa
+    "ae"  // Middle East
+  ];
+
+  const countryResults =
+    await Promise.all(
+      countries.map(
+        async country => {
+
+          try {
+
+            const params =
+              new URLSearchParams({
+                country,
+                pageSize: "3",
+                apiKey:
+                  process.env.NEWS_API_KEY
+              });
+
+            const response =
+              await fetch(
+                `https://newsapi.org/v2/top-headlines?${params.toString()}`
+              );
+
+            const data =
+              await response.json();
+
+            if (
+              !response.ok ||
+              data.status === "error"
+            ) {
+
+              console.error(
+                "WORLD NEWS API ERROR:",
+                country,
+                data
+              );
+
+              return [];
+            }
+
+            return (
+              data.articles || []
+            )
+              .filter(article => {
+
+                const title =
+                  String(
+                    article?.title || ""
+                  ).trim();
+
+                return (
+                  title &&
+                  title !== "[Removed]"
+                );
+              })
+              .map(article => ({
+                title:
+                  String(
+                    article.title || ""
+                  ).trim(),
+
+                description:
+                  String(
+                    article.description || ""
+                  ).trim() || null,
+
+                source:
+                  String(
+                    article.source?.name ||
+                    ""
+                  ).trim() ||
+                  "Unknown source",
+
+                publishedAt:
+                  article.publishedAt ||
+                  null
+              }));
+
+          } catch (err) {
+
+            console.error(
+              "WORLD NEWS COUNTRY ERROR:",
+              country,
+              err
+            );
+
+            return [];
+          }
+        }
+      )
+    );
+
+  /*
+   * Merge all regional feeds.
+   */
+  const combined =
+    countryResults.flat();
+
+  /*
+   * Newest first.
+   */
+  combined.sort(
+    (a, b) =>
+      new Date(
+        b.publishedAt || 0
+      ).getTime() -
+      new Date(
+        a.publishedAt || 0
+      ).getTime()
+  );
+
+  /*
+   * Remove exact / near-exact duplicate
+   * headlines.
+   */
+  const seenTitles =
+    new Set();
+
+  const articles =
+    combined
+      .filter(article => {
+
+        const key =
+  article.title
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(
+      /[^\p{L}\p{N}]+/gu,
+      " "
+    )
+    .trim();
+
+        if (
+          !key ||
+          seenTitles.has(key)
+        ) {
+          return false;
+        }
+
+        seenTitles.add(key);
+
+        return true;
+      })
+      .slice(0, 12);
+
+  worldNewsCache = {
+    expiresAt:
+      now +
+      WORLD_NEWS_CACHE_MS,
+
+    articles
+  };
+
+  console.log(
+    "WORLD NEWS:",
+    {
+      countries:
+        countries.length,
+      returned:
+        articles.length
+    }
+  );
+
+  return res.json({
+    scope: "world",
+    cached: false,
+    articles
+  });
+}
 
     if (!cleanQuery) {
       return res.status(400).json({
