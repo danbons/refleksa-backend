@@ -1243,14 +1243,14 @@ app.get(
 
 
       const publishedAfter =
-        new Date(
-          freshnessCutoffMs
-        )
-          .toISOString()
-          .replace(
-            /\.\d{3}Z$/,
-            "Z"
-          );
+  new Date(
+    freshnessCutoffMs
+  )
+    .toISOString()
+    .replace(
+      /\.\d{3}Z$/,
+      ""
+    );
 
 
       const params =
