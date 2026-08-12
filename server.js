@@ -1384,146 +1384,316 @@ if (providerCategory) {
       }
 
 
-      const endpoint =
-        "https://api.thenewsapi.com" +
-        "/v1/news/top?" +
-        params.toString();
+      const normalizeNewsArticles =
+  providerData =>
+    (
+      Array.isArray(
+        providerData?.data
+      )
+        ? providerData.data
+        : []
+    )
+      .map(article => {
 
+        const title =
+          String(
+            article?.title || ""
+          ).trim();
 
-      console.log(
-        "THE NEWS API REQUEST:",
-        {
-          query:
-            cleanQuery || null,
+        const description =
+          String(
+            article?.description || ""
+          ).trim();
 
-          scope:
-            isWorld
-              ? "world"
-              : null,
+        const source =
+          String(
+            article?.source || ""
+          ).trim();
 
-          country:
-            requestedCountry ||
-            null,
+        const publishedAt =
+          String(
+            article?.published_at || ""
+          ).trim();
 
-          category:
-            category || null,
+        return {
+          title,
+          description:
+            description || null,
+          source:
+            source ||
+            "Unknown source",
+          publishedAt
+        };
+      })
+      .filter(article => {
 
-          publishedAfter
+        if (!article.title) {
+          return false;
         }
+
+        const publishedMs =
+          Date.parse(
+            article.publishedAt
+          );
+
+        return (
+          Number.isFinite(
+            publishedMs
+          ) &&
+          publishedMs >=
+            freshnessCutoffMs
+        );
+      })
+      .slice(
+        0,
+        3
       );
 
 
-      const response =
-        await fetch(
-          endpoint
-        );
+const fetchNewsAttempt =
+  async (
+    attemptParams,
+    attemptName
+  ) => {
 
+    console.log(
+      "THE NEWS API ATTEMPT:",
+      {
+        attempt:
+          attemptName,
 
-      const raw =
-        await response.text();
+        search:
+          attemptParams.get(
+            "search"
+          ) || null,
 
+        locale:
+          attemptParams.get(
+            "locale"
+          ) || null,
 
-      let data;
-
-      try {
-        data =
-          JSON.parse(raw);
-      } catch {
-
-        console.error(
-          "THE NEWS API PARSE ERROR:",
-          raw
-        );
-
-        return res.status(502).json({
-          error:
-            "News provider parse error.",
-          articles: []
-        });
+        category:
+          attemptParams.get(
+            "categories"
+          ) || null
       }
+    );
 
 
-      if (!response.ok) {
+    const attemptEndpoint =
+      "https://api.thenewsapi.com" +
+      "/v1/news/top?" +
+      attemptParams.toString();
 
-        console.error(
-          "THE NEWS API ERROR:",
-          data
+
+    const attemptResponse =
+      await fetch(
+        attemptEndpoint
+      );
+
+
+    const attemptRaw =
+      await attemptResponse.text();
+
+
+    let attemptData;
+
+    try {
+
+      attemptData =
+        JSON.parse(
+          attemptRaw
         );
 
-        return res.status(
-          response.status
-        ).json({
-          error:
-            data?.message ||
-            data?.error ||
-            "News provider error.",
-          articles: []
-        });
-      }
+    } catch {
+
+      console.error(
+        "THE NEWS API PARSE ERROR:",
+        attemptRaw
+      );
+
+      return {
+        ok: false,
+        status: 502,
+        error:
+          "News provider parse error.",
+        data: null,
+        articles: []
+      };
+    }
 
 
-      const articles =
-        (
-          Array.isArray(data.data)
-            ? data.data
-            : []
+    if (!attemptResponse.ok) {
+
+      console.error(
+        "THE NEWS API ERROR:",
+        attemptData
+      );
+
+      return {
+        ok: false,
+        status:
+          attemptResponse.status,
+        error:
+          attemptData?.message ||
+          attemptData?.error ||
+          "News provider error.",
+        data:
+          attemptData,
+        articles: []
+      };
+    }
+
+
+    return {
+      ok: true,
+      status:
+        attemptResponse.status,
+      error: null,
+      data:
+        attemptData,
+      articles:
+        normalizeNewsArticles(
+          attemptData
         )
-          .map(article => {
+    };
+  };
 
-            const title =
-              String(
-                article?.title || ""
-              ).trim();
 
-            const description =
-              String(
-                article?.description || ""
-              ).trim();
+let newsResult =
+  await fetchNewsAttempt(
+    params,
+    "strict"
+  );
 
-            const source =
-              String(
-                article?.source || ""
-              ).trim();
 
-            const publishedAt =
-              String(
-                article?.published_at || ""
-              ).trim();
+if (!newsResult.ok) {
 
-            return {
-              title,
-              description:
-                description || null,
-              source:
-                source ||
-                "Unknown source",
-              publishedAt
-            };
-          })
-          .filter(article => {
+  return res.status(
+    newsResult.status
+  ).json({
+    error:
+      newsResult.error,
+    articles: []
+  });
+}
 
-            if (!article.title) {
-              return false;
-            }
 
-            const publishedMs =
-              Date.parse(
-                article.publishedAt
-              );
+let retrieval =
+  "strict";
 
-            return (
-              Number.isFinite(
-                publishedMs
-              ) &&
-              publishedMs >=
-                freshnessCutoffMs
-            );
-          })
-          .slice(
-            0,
-            3
-          );
 
+/*
+ * PROGRESSIVE FALLBACK
+ *
+ * Used only when the user requested
+ * a specific topic inside a country
+ * and the strict search returned
+ * no fresh articles.
+ */
+if (
+  newsResult.articles.length === 0 &&
+  cleanQuery &&
+  requestedCountry
+) {
+
+  // ===============================
+  // FALLBACK 1
+  // KEEP COUNTRY + QUERY
+  // REMOVE CATEGORY
+  // ===============================
+
+  const relaxedParams =
+    new URLSearchParams(
+      params
+    );
+
+  relaxedParams.delete(
+    "categories"
+  );
+
+
+  const relaxedResult =
+    await fetchNewsAttempt(
+      relaxedParams,
+      "country_query"
+    );
+
+
+  if (relaxedResult.ok) {
+
+    newsResult =
+      relaxedResult;
+
+    retrieval =
+      "country_query";
+  }
+
+
+  // ===============================
+  // FALLBACK 2
+  // BROAD COUNTRY + TOPIC SEARCH
+  // ===============================
+
+  if (
+    newsResult.articles.length === 0
+  ) {
+
+    const broadParams =
+      new URLSearchParams({
+        api_token:
+          process.env
+            .THE_NEWS_API_KEY,
+
+        limit:
+          "3",
+
+        published_after:
+          publishedAfter
+      });
+
+
+    broadParams.set(
+      "search",
+      (
+        countrySearchName +
+        " " +
+        cleanQuery
+      ).trim()
+    );
+
+
+    broadParams.set(
+      "search_fields",
+      "title,description"
+    );
+
+
+    const broadResult =
+      await fetchNewsAttempt(
+        broadParams,
+        "broad_country_query"
+      );
+
+
+    if (broadResult.ok) {
+
+      newsResult =
+        broadResult;
+
+      retrieval =
+        "broad_country_query";
+    }
+  }
+}
+
+
+let data =
+  newsResult.data || {};
+
+
+let articles =
+  newsResult.articles;
 
       if (cacheKey) {
 
@@ -1557,6 +1727,9 @@ if (providerCategory) {
 
           category:
             category || null,
+
+          retrieval:
+            retrieval,
 
           providerFound:
             Number(
@@ -1592,6 +1765,9 @@ if (providerCategory) {
 
         category:
           category || null,
+
+        retrieval:
+          retrieval,
 
         cached:
           false,
