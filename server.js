@@ -1255,6 +1255,25 @@ app.get(
       ""
     );
 
+      const regionNames =
+  new Intl.DisplayNames(
+    ["en"],
+    {
+      type: "region"
+    }
+  );
+
+
+const countrySearchName =
+  requestedCountry
+    ? (
+        regionNames.of(
+          requestedCountry.toUpperCase()
+        ) ||
+        requestedCountry.toUpperCase()
+      )
+    : "";
+
 
       const params =
         new URLSearchParams({
