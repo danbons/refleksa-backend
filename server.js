@@ -1234,6 +1234,72 @@ app.get(
         category === "technology"
           ? "tech"
           : category;
+      const providerSupportedLocales =
+  new Set([
+    "ar",
+    "am",
+    "au",
+    "at",
+    "by",
+    "be",
+    "bo",
+    "br",
+    "bg",
+    "ca",
+    "cl",
+    "cn",
+    "co",
+    "hr",
+    "cz",
+    "ec",
+    "eg",
+    "fr",
+    "de",
+    "gr",
+    "hn",
+    "hk",
+    "in",
+    "id",
+    "ir",
+    "ie",
+    "il",
+    "it",
+    "jp",
+    "kr",
+    "mx",
+    "nl",
+    "nz",
+    "ni",
+    "pk",
+    "pa",
+    "pe",
+    "pl",
+    "pt",
+    "qa",
+    "ro",
+    "ru",
+    "sa",
+    "za",
+    "es",
+    "ch",
+    "sy",
+    "tw",
+    "th",
+    "tr",
+    "ua",
+    "gb",
+    "us",
+    "uy",
+    "ve"
+  ]);
+
+
+const providerSupportsCountry =
+  requestedCountry
+    ? providerSupportedLocales.has(
+        requestedCountry
+      )
+    : false;
 
 
       /*
@@ -1306,14 +1372,60 @@ const countrySearchName =
 
 
       // ===============================
+// ===============================
 // COUNTRY
 // ===============================
 if (requestedCountry) {
 
-  params.set(
-    "locale",
-    requestedCountry
-  );
+  if (providerSupportsCountry) {
+
+    /*
+     * Provider-supported country:
+     * use the precise locale filter.
+     */
+    params.set(
+      "locale",
+      requestedCountry
+    );
+
+  } else {
+
+    /*
+     * Universal country fallback:
+     *
+     * The News API does not provide a
+     * locale for this country, therefore
+     * search using its English country
+     * name instead.
+     */
+    params.delete(
+      "locale"
+    );
+
+
+    const universalCountrySearch =
+      [
+        countrySearchName,
+        cleanQuery
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+
+    if (universalCountrySearch) {
+
+      params.set(
+        "search",
+        universalCountrySearch
+      );
+
+      params.set(
+        "search_fields",
+        "title,description"
+      );
+    }
+  }
 }
 
 
@@ -1659,8 +1771,14 @@ let retrieval =
  */
 if (
   newsResult.articles.length === 0 &&
-  cleanQuery &&
-  requestedCountry
+  requestedCountry &&
+  (
+    cleanQuery ||
+    (
+      !providerSupportsCountry &&
+      providerCategory
+    )
+  )
 ) {
 
   // ===============================
