@@ -1159,15 +1159,18 @@ app.get(
 
 
       const allowedCategories =
-        new Set([
-          "general",
-          "business",
-          "entertainment",
-          "health",
-          "science",
-          "sports",
-          "technology"
-        ]);
+  new Set([
+    "general",
+    "business",
+    "entertainment",
+    "health",
+    "science",
+    "sports",
+    "technology",
+    "politics",
+    "food",
+    "travel"
+  ]);
 
 
       const category =
@@ -1284,33 +1287,27 @@ app.get(
 
 
       // ===============================
-      // COUNTRY
-      // ===============================
-      if (
-        !cleanQuery &&
-        requestedCountry
-      ) {
+// COUNTRY
+// ===============================
+if (requestedCountry) {
 
-        params.set(
-          "locale",
-          requestedCountry
-        );
-      }
+  params.set(
+    "locale",
+    requestedCountry
+  );
+}
 
 
       // ===============================
-      // CATEGORY
-      // ===============================
-      if (
-        !cleanQuery &&
-        providerCategory
-      ) {
+// CATEGORY
+// ===============================
+if (providerCategory) {
 
-        params.set(
-          "categories",
-          providerCategory
-        );
-      }
+  params.set(
+    "categories",
+    providerCategory
+  );
+}
 
 
       /*
