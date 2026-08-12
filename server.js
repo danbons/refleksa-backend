@@ -1486,14 +1486,80 @@ const fetchNewsAttempt =
       attemptParams.toString();
 
 
-    const attemptResponse =
-      await fetch(
-        attemptEndpoint
-      );
+    const controller =
+  new AbortController();
 
 
-    const attemptRaw =
-      await attemptResponse.text();
+const timeoutId =
+  setTimeout(
+    () => {
+      controller.abort();
+    },
+    5_000
+  );
+
+
+let attemptResponse;
+
+
+try {
+
+  attemptResponse =
+    await fetch(
+      attemptEndpoint,
+      {
+        signal:
+          controller.signal
+      }
+    );
+
+} catch (error) {
+
+  if (
+    error?.name ===
+    "AbortError"
+  ) {
+
+    console.warn(
+      "THE NEWS API TIMEOUT:",
+      {
+        attempt:
+          attemptName,
+
+        timeoutMs:
+          5_000
+      }
+    );
+
+
+    /*
+     * A timeout is treated as
+     * an empty attempt so the
+     * progressive fallback can
+     * continue automatically.
+     */
+    return {
+      ok: true,
+      status: 200,
+      error: null,
+      data: null,
+      articles: []
+    };
+  }
+
+
+  throw error;
+
+} finally {
+
+  clearTimeout(
+    timeoutId
+  );
+}
+
+
+const attemptRaw =
+  await attemptResponse.text();
 
 
     let attemptData;
