@@ -1095,7 +1095,7 @@ app.get("/weather", requirePrototypeToken, async (_req, res) => {
 });
 
 // ===============================
-// NEWS
+// NEWS — THE NEWS API
 // ===============================
 let worldNewsCache = {
   key: "",
@@ -1106,834 +1106,508 @@ let worldNewsCache = {
 const WORLD_NEWS_CACHE_MS =
   15 * 60 * 1000;
 
-app.get("/news", requirePrototypeToken, async (req, res) => {
-  try {
-    const cleanQuery =
-      String(req.query.query || "")
-        .trim();
+const NEWS_FRESHNESS_MS =
+  24 * 60 * 60 * 1000;
 
-    const requestedScope =
-  String(req.query.scope || "")
-    .trim()
-    .toLowerCase();
+app.get(
+  "/news",
+  requirePrototypeToken,
+  async (req, res) => {
+    try {
 
-    const requestedCountry =
-  String(req.query.country || "")
-    .trim()
-    .toLowerCase();
+      if (!process.env.THE_NEWS_API_KEY) {
+        console.error(
+          "Missing THE_NEWS_API_KEY."
+        );
 
-const requestedCategory =
-  String(req.query.category || "")
-    .trim()
-    .toLowerCase();
+        return res.status(500).json({
+          error:
+            "News API configuration error.",
+          articles: []
+        });
+      }
 
-const allowedCategories =
-  new Set([
-    "general",
-    "business",
-    "entertainment",
-    "health",
-    "science",
-    "sports",
-    "technology"
-  ]);
 
-const category =
-  requestedCategory === ""
-    ? ""
-    : allowedCategories.has(
-        requestedCategory
-      )
-        ? requestedCategory
-        : null;
+      const cleanQuery =
+        String(
+          req.query.query || ""
+        ).trim();
 
-if (category === null) {
-  return res.status(400).json({
-    error: "Invalid news category.",
-    articles: []
-  });
-}
 
-if (
-  requestedCountry &&
-  !/^[a-z]{2}$/.test(
-    requestedCountry
-  )
-) {
-  return res.status(400).json({
-    error: "Invalid country code.",
-    articles: []
-  });
-}
+      const requestedScope =
+        String(
+          req.query.scope || ""
+        )
+          .trim()
+          .toLowerCase();
 
-  
 
-    // ===============================
-// WORLD NEWS
-// ===============================
-if (
-  requestedScope === "world" ||
-  (
-    !cleanQuery &&
-    !requestedCountry &&
-    category
-  )
-) {
+      const requestedCountry =
+        String(
+          req.query.country || ""
+        )
+          .trim()
+          .toLowerCase();
 
-  const now = Date.now();
-  const worldCacheKey =
-  category || "general";
 
-  /*
-   * Reuse the latest world briefing for
-   * a short period so one user request
-   * does not repeatedly consume many
-   * NewsAPI calls.
-   */
-  if (
-  worldNewsCache.key ===
-    worldCacheKey &&
-  worldNewsCache.expiresAt > now &&
-  worldNewsCache.articles.length > 0
-) {
-    return res.json({
-  scope: "world",
-  category:
-    category || null,
-  cached: true,
-  articles:
-    worldNewsCache.articles
-});
-  }
+      const requestedCategory =
+        String(
+          req.query.category || ""
+        )
+          .trim()
+          .toLowerCase();
 
-  const countries = [
-    "us", // North America
-    "gb", // UK / Europe
-    "de", // continental Europe
-    "in", // South Asia
-    "jp", // East Asia
-    "br", // South America
-    "za", // Africa
-    "ae"  // Middle East
-  ];
 
-  const countryResults =
-    await Promise.all(
-      countries.map(
-        async country => {
+      const allowedCategories =
+        new Set([
+          "general",
+          "business",
+          "entertainment",
+          "health",
+          "science",
+          "sports",
+          "technology"
+        ]);
 
-          try {
 
-            const params =
-              new URLSearchParams({
-                country,
-                pageSize: "3",
-                apiKey:
-                  process.env.NEWS_API_KEY
-              });
-            if (category) {
-  params.set(
-    "category",
-    category
-  );
-}
+      const category =
+        requestedCategory === ""
+          ? ""
+          : allowedCategories.has(
+              requestedCategory
+            )
+              ? requestedCategory
+              : null;
 
-            const response =
-              await fetch(
-                `https://newsapi.org/v2/top-headlines?${params.toString()}`
-              );
 
-            const data =
-              await response.json();
+      if (category === null) {
+        return res.status(400).json({
+          error:
+            "Invalid news category.",
+          articles: []
+        });
+      }
 
-            if (
-              !response.ok ||
-              data.status === "error"
-            ) {
 
-              console.error(
-                "WORLD NEWS API ERROR:",
-                country,
-                data
-              );
+      if (
+        requestedCountry &&
+        !/^[a-z]{2}$/.test(
+          requestedCountry
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Invalid country code.",
+          articles: []
+        });
+      }
 
-              return [];
+
+      const isWorld =
+        requestedScope === "world";
+
+
+      if (
+        !cleanQuery &&
+        !isWorld &&
+        !requestedCountry &&
+        !category
+      ) {
+        return res.status(400).json({
+          error:
+            "Missing news request.",
+          articles: []
+        });
+      }
+
+
+      /*
+       * Refleksa calls the category
+       * "technology".
+       *
+       * The News API calls it "tech".
+       */
+      const providerCategory =
+        category === "technology"
+          ? "tech"
+          : category;
+
+
+      /*
+       * Strict freshness window:
+       * only the previous 24 hours.
+       */
+      const freshnessCutoffMs =
+        Date.now() -
+        NEWS_FRESHNESS_MS;
+
+
+      const publishedAfter =
+        new Date(
+          freshnessCutoffMs
+        )
+          .toISOString()
+          .replace(
+            /\.\d{3}Z$/,
+            "Z"
+          );
+
+
+      const params =
+        new URLSearchParams({
+          api_token:
+            process.env.THE_NEWS_API_KEY,
+
+          limit:
+            "3",
+
+          published_after:
+            publishedAfter
+        });
+
+
+      // ===============================
+      // TOPIC
+      // ===============================
+      if (cleanQuery) {
+
+        params.set(
+          "search",
+          cleanQuery
+        );
+
+        params.set(
+          "search_fields",
+          "title,description"
+        );
+      }
+
+
+      // ===============================
+      // COUNTRY
+      // ===============================
+      if (
+        !cleanQuery &&
+        requestedCountry
+      ) {
+
+        params.set(
+          "locale",
+          requestedCountry
+        );
+      }
+
+
+      // ===============================
+      // CATEGORY
+      // ===============================
+      if (
+        !cleanQuery &&
+        providerCategory
+      ) {
+
+        params.set(
+          "categories",
+          providerCategory
+        );
+      }
+
+
+      /*
+       * WORLD:
+       *
+       * We intentionally send no locale.
+       * The provider therefore searches
+       * globally.
+       */
+      const cacheKey =
+        isWorld
+          ? (
+              "world:" +
+              (
+                providerCategory ||
+                "general"
+              )
+            )
+          : "";
+
+
+      const now =
+        Date.now();
+
+
+      if (
+        cacheKey &&
+        worldNewsCache.key ===
+          cacheKey &&
+        worldNewsCache.expiresAt >
+          now &&
+        worldNewsCache.articles
+          .length > 0
+      ) {
+
+        return res.json({
+          provider:
+            "the_news_api",
+
+          scope:
+            "world",
+
+          category:
+            category || null,
+
+          cached:
+            true,
+
+          freshnessHours:
+            24,
+
+          articles:
+            worldNewsCache.articles
+        });
+      }
+
+
+      const endpoint =
+        "https://api.thenewsapi.com" +
+        "/v1/news/top?" +
+        params.toString();
+
+
+      console.log(
+        "THE NEWS API REQUEST:",
+        {
+          query:
+            cleanQuery || null,
+
+          scope:
+            isWorld
+              ? "world"
+              : null,
+
+          country:
+            requestedCountry ||
+            null,
+
+          category:
+            category || null,
+
+          publishedAfter
+        }
+      );
+
+
+      const response =
+        await fetch(
+          endpoint
+        );
+
+
+      const raw =
+        await response.text();
+
+
+      let data;
+
+      try {
+        data =
+          JSON.parse(raw);
+      } catch {
+
+        console.error(
+          "THE NEWS API PARSE ERROR:",
+          raw
+        );
+
+        return res.status(502).json({
+          error:
+            "News provider parse error.",
+          articles: []
+        });
+      }
+
+
+      if (!response.ok) {
+
+        console.error(
+          "THE NEWS API ERROR:",
+          data
+        );
+
+        return res.status(
+          response.status
+        ).json({
+          error:
+            data?.message ||
+            data?.error ||
+            "News provider error.",
+          articles: []
+        });
+      }
+
+
+      const articles =
+        (
+          Array.isArray(data.data)
+            ? data.data
+            : []
+        )
+          .map(article => {
+
+            const title =
+              String(
+                article?.title || ""
+              ).trim();
+
+            const description =
+              String(
+                article?.description || ""
+              ).trim();
+
+            const source =
+              String(
+                article?.source || ""
+              ).trim();
+
+            const publishedAt =
+              String(
+                article?.published_at || ""
+              ).trim();
+
+            return {
+              title,
+              description:
+                description || null,
+              source:
+                source ||
+                "Unknown source",
+              publishedAt
+            };
+          })
+          .filter(article => {
+
+            if (!article.title) {
+              return false;
             }
 
+            const publishedMs =
+              Date.parse(
+                article.publishedAt
+              );
+
             return (
-              data.articles || []
-            )
-              .filter(article => {
-
-                const title =
-                  String(
-                    article?.title || ""
-                  ).trim();
-
-                return (
-                  title &&
-                  title !== "[Removed]"
-                );
-              })
-              .map(article => ({
-                title:
-                  String(
-                    article.title || ""
-                  ).trim(),
-
-                description:
-                  String(
-                    article.description || ""
-                  ).trim() || null,
-
-                source:
-                  String(
-                    article.source?.name ||
-                    ""
-                  ).trim() ||
-                  "Unknown source",
-
-                publishedAt:
-                  article.publishedAt ||
-                  null
-              }));
-
-          } catch (err) {
-
-            console.error(
-              "WORLD NEWS COUNTRY ERROR:",
-              country,
-              err
+              Number.isFinite(
+                publishedMs
+              ) &&
+              publishedMs >=
+                freshnessCutoffMs
             );
-
-            return [];
-          }
-        }
-      )
-    );
-
-  /*
-   * Merge all regional feeds.
-   */
-  const combined =
-    countryResults.flat();
-
-  /*
-   * Newest first.
-   */
-  combined.sort(
-    (a, b) =>
-      new Date(
-        b.publishedAt || 0
-      ).getTime() -
-      new Date(
-        a.publishedAt || 0
-      ).getTime()
-  );
-
-  /*
-   * Remove exact / near-exact duplicate
-   * headlines.
-   */
-  const seenTitles =
-    new Set();
-
-  const articles =
-    combined
-      .filter(article => {
-
-        const key =
-  article.title
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(
-      /[^\p{L}\p{N}]+/gu,
-      " "
-    )
-    .trim();
-
-        if (
-          !key ||
-          seenTitles.has(key)
-        ) {
-          return false;
-        }
-
-        seenTitles.add(key);
-
-        return true;
-      })
-      .slice(0, 12);
-
-  worldNewsCache = {
-  key:
-    worldCacheKey,
-
-  expiresAt:
-    now +
-    WORLD_NEWS_CACHE_MS,
-
-  articles
-};
-
-  console.log(
-    "WORLD NEWS:",
-    {
-      countries:
-        countries.length,
-      returned:
-        articles.length
-    }
-  );
-
-  return res.json({
-  scope: "world",
-  category:
-    category || null,
-  cached: false,
-  articles
-});
-  
-}
-  // ===============================
-// COUNTRY NEWS
-// ===============================
-if (requestedCountry) {
-
-  /*
-   * Normalize NewsAPI articles into the
-   * compact format used by Refleksa.
-   */
-  const normalizeCountryArticles =
-    rawArticles =>
-      (rawArticles || [])
-        .filter(article => {
-
-          const title =
-            String(
-              article?.title || ""
-            ).trim();
-
-          return (
-            title &&
-            title !== "[Removed]"
+          })
+          .slice(
+            0,
+            3
           );
-        })
-        .map(article => ({
-          title:
-            String(
-              article.title || ""
-            ).trim(),
-
-          description:
-            String(
-              article.description || ""
-            ).trim() || null,
-
-          source:
-            String(
-              article.source?.name ||
-              ""
-            ).trim() ||
-            "Unknown source",
-
-          publishedAt:
-            article.publishedAt ||
-            null
-        }))
-        .slice(0, 8);
 
 
-  // ===============================
-  // STEP 1
-  // DIRECT COUNTRY HEADLINES
-  // ===============================
+      if (cacheKey) {
 
-  const directParams =
-    new URLSearchParams({
-      country:
-        requestedCountry,
+        worldNewsCache = {
+          key:
+            cacheKey,
 
-      pageSize: "8",
+          expiresAt:
+            now +
+            WORLD_NEWS_CACHE_MS,
 
-      apiKey:
-        process.env.NEWS_API_KEY
-    });
-
-
-  if (category) {
-
-    directParams.set(
-      "category",
-      category
-    );
-  }
-
-
-  const directResponse =
-    await fetch(
-      `https://newsapi.org/v2/top-headlines?${directParams.toString()}`
-    );
-
-
-  const directData =
-    await directResponse.json();
-
-
-  if (
-    !directResponse.ok ||
-    directData.status === "error"
-  ) {
-
-    console.error(
-      "COUNTRY NEWS DIRECT API ERROR:",
-      {
-        country:
-          requestedCountry,
-
-        category,
-
-        data:
-          directData
+          articles
+        };
       }
-    );
 
-    return res.status(502).json({
-      error:
-        directData.message ||
-        "Country news API error",
 
-      country:
-        requestedCountry,
-
-      category:
-        category || null,
-
-      articles: []
-    });
-  }
-
-
-  const directArticles =
-    normalizeCountryArticles(
-      directData.articles
-    );
-
-
-  console.log(
-    "COUNTRY NEWS DIRECT:",
-    {
-      country:
-        requestedCountry,
-
-      category:
-        category || "general",
-
-      returned:
-        directArticles.length
-    }
-  );
-
-
-  /*
-   * If the normal country endpoint works,
-   * use it immediately.
-   */
-  if (
-    directArticles.length > 0
-  ) {
-
-    return res.json({
-      country:
-        requestedCountry,
-
-      category:
-        category || null,
-
-      retrieval:
-        "country",
-
-      articles:
-        directArticles
-    });
-  }
-
-
-  // ===============================
-  // STEP 2
-  // COUNTRY SOURCES FALLBACK
-  // ===============================
-
-  console.log(
-    "COUNTRY NEWS FALLBACK START:",
-    {
-      country:
-        requestedCountry,
-
-      category:
-        category || "general"
-    }
-  );
-
-
-  const sourceParams =
-    new URLSearchParams({
-      country:
-        requestedCountry,
-
-      apiKey:
-        process.env.NEWS_API_KEY
-    });
-
-
-  /*
-   * Here category is allowed because
-   * we are selecting SOURCES.
-   */
-  if (category) {
-
-    sourceParams.set(
-      "category",
-      category
-    );
-  }
-
-
-  const sourcesResponse =
-    await fetch(
-      `https://newsapi.org/v2/top-headlines/sources?${sourceParams.toString()}`
-    );
-
-
-  const sourcesData =
-    await sourcesResponse.json();
-
-
-  if (
-    !sourcesResponse.ok ||
-    sourcesData.status === "error"
-  ) {
-
-    console.error(
-      "COUNTRY NEWS SOURCES ERROR:",
-      {
-        country:
-          requestedCountry,
-
-        category,
-
-        data:
-          sourcesData
-      }
-    );
-
-    return res.json({
-      country:
-        requestedCountry,
-
-      category:
-        category || null,
-
-      retrieval:
-        "country_empty",
-
-      articles: []
-    });
-  }
-
-
-  /*
-   * NewsAPI accepts maximum 20 source IDs
-   * in an Everything request, and keeping
-   * the list compact is useful here too.
-   */
-  const sourceIds =
-    (sourcesData.sources || [])
-      .map(source =>
-        String(
-          source?.id || ""
-        ).trim()
-      )
-      .filter(Boolean)
-      .slice(0, 20);
-
-
-  console.log(
-    "COUNTRY NEWS SOURCES:",
-    {
-      country:
-        requestedCountry,
-
-      category:
-        category || "general",
-
-      sources:
-        sourceIds.length,
-
-      sourceIds
-    }
-  );
-
-
-  /*
-   * No publisher available for that
-   * country/category.
-   */
-  if (
-    sourceIds.length === 0
-  ) {
-
-    return res.json({
-      country:
-        requestedCountry,
-
-      category:
-        category || null,
-
-      retrieval:
-        "no_country_sources",
-
-      articles: []
-    });
-  }
-
-
-  // ===============================
-  // STEP 3
-  // HEADLINES FROM COUNTRY SOURCES
-  // ===============================
-
-  const fallbackParams =
-    new URLSearchParams({
-
-      sources:
-        sourceIds.join(","),
-
-      pageSize: "12",
-
-      apiKey:
-        process.env.NEWS_API_KEY
-    });
-
-
-  /*
-   * IMPORTANT:
-   *
-   * Do NOT put country or category here.
-   *
-   * NewsAPI does not allow "sources"
-   * together with country/category.
-   *
-   * The sources were already selected
-   * above using country/category.
-   */
-  const fallbackResponse =
-    await fetch(
-      `https://newsapi.org/v2/top-headlines?${fallbackParams.toString()}`
-    );
-
-
-  const fallbackData =
-    await fallbackResponse.json();
-
-
-  if (
-    !fallbackResponse.ok ||
-    fallbackData.status === "error"
-  ) {
-
-    console.error(
-      "COUNTRY NEWS FALLBACK API ERROR:",
-      {
-        country:
-          requestedCountry,
-
-        category,
-
-        sources:
-          sourceIds,
-
-        data:
-          fallbackData
-      }
-    );
-
-    return res.json({
-      country:
-        requestedCountry,
-
-      category:
-        category || null,
-
-      retrieval:
-        "sources_failed",
-
-      articles: []
-    });
-  }
-
-
-  const fallbackArticles =
-    normalizeCountryArticles(
-      fallbackData.articles
-    );
-
-
-  console.log(
-    "COUNTRY NEWS FALLBACK RESULT:",
-    {
-      country:
-        requestedCountry,
-
-      category:
-        category || "general",
-
-      sources:
-        sourceIds.length,
-
-      returned:
-        fallbackArticles.length
-    }
-  );
-
-
-  return res.json({
-    country:
-      requestedCountry,
-
-    category:
-      category || null,
-
-    retrieval:
-      "country_sources",
-
-    articles:
-      fallbackArticles
-  });
-}
-
-    if (!cleanQuery) {
-      return res.status(400).json({
-        error: "Missing news query.",
-        query: null,
-        articles: []
-      });
-    }
-
-    if (!process.env.NEWS_API_KEY) {
-      console.error("Missing NEWS_API_KEY.");
-
-      return res.status(500).json({
-        error: "News API configuration error.",
-        query: cleanQuery,
-        articles: []
-      });
-    }
-
-    const params =
-      new URLSearchParams({
-        q: cleanQuery,
-        sortBy: "publishedAt",
-        pageSize: "5",
-        apiKey: process.env.NEWS_API_KEY
-      });
-
-    const response =
-      await fetch(
-        `https://newsapi.org/v2/everything?${params.toString()}`
+      console.log(
+        "THE NEWS API RESULT:",
+        {
+          query:
+            cleanQuery || null,
+
+          scope:
+            isWorld
+              ? "world"
+              : null,
+
+          country:
+            requestedCountry ||
+            null,
+
+          category:
+            category || null,
+
+          providerFound:
+            Number(
+              data?.meta?.found
+            ) || 0,
+
+          providerReturned:
+            Number(
+              data?.meta?.returned
+            ) || 0,
+
+          acceptedFresh:
+            articles.length
+        }
       );
 
-    const data =
-      await response.json();
 
-    if (
-      !response.ok ||
-      data.status === "error"
-    ) {
-      console.error(
-        "NEWS API ERROR:",
-        data
-      );
+      return res.json({
+        provider:
+          "the_news_api",
 
-      return res.status(502).json({
-        error:
-          data.message ||
-          "News API error",
-        query: cleanQuery,
-        articles: []
-      });
-    }
+        query:
+          cleanQuery || null,
 
-    const articles =
-      (data.articles || [])
-        .filter(article => {
-          const title =
-            String(
-              article?.title || ""
-            ).trim();
+        scope:
+          isWorld
+            ? "world"
+            : null,
 
-          return (
-            title &&
-            title !== "[Removed]"
-          );
-        })
-        .slice(0, 5)
-        .map(article => ({
-          title:
-            String(
-              article.title || ""
-            ).trim(),
+        country:
+          requestedCountry ||
+          null,
 
-          description:
-            String(
-              article.description || ""
-            ).trim() || null,
+        category:
+          category || null,
 
-          source:
-            String(
-              article.source?.name ||
-              ""
-            ).trim() || "Unknown source",
+        cached:
+          false,
 
-          publishedAt:
-            article.publishedAt || null
-        }));
+        freshnessHours:
+          24,
 
-    console.log(
-      "NEWS SEARCH:",
-      {
-        query: cleanQuery,
         totalResults:
           Number(
-            data.totalResults
+            data?.meta?.found
           ) || 0,
-        returned:
-          articles.length
-      }
-    );
 
-    return res.json({
-      query: cleanQuery,
-      totalResults:
-        Number(
-          data.totalResults
-        ) || 0,
-      articles
-    });
+        articles
+      });
 
-  } catch (err) {
 
-    console.error(
-      "NEWS ERROR:",
-      err
-    );
+    } catch (err) {
 
-    return res.status(500).json({
-      error: "News error",
-      articles: []
-    });
+      console.error(
+        "NEWS ERROR:",
+        err
+      );
+
+      return res.status(500).json({
+        error:
+          "News error",
+        articles: []
+      });
+    }
   }
-});
+);
+
 // ===============================
 // TIME
 // ===============================
