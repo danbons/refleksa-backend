@@ -1400,7 +1400,56 @@ if (
 // ===============================
 if (requestedCountry) {
 
-  const params =
+  /*
+   * Normalize NewsAPI articles into the
+   * compact format used by Refleksa.
+   */
+  const normalizeCountryArticles =
+    rawArticles =>
+      (rawArticles || [])
+        .filter(article => {
+
+          const title =
+            String(
+              article?.title || ""
+            ).trim();
+
+          return (
+            title &&
+            title !== "[Removed]"
+          );
+        })
+        .map(article => ({
+          title:
+            String(
+              article.title || ""
+            ).trim(),
+
+          description:
+            String(
+              article.description || ""
+            ).trim() || null,
+
+          source:
+            String(
+              article.source?.name ||
+              ""
+            ).trim() ||
+            "Unknown source",
+
+          publishedAt:
+            article.publishedAt ||
+            null
+        }))
+        .slice(0, 8);
+
+
+  // ===============================
+  // STEP 1
+  // DIRECT COUNTRY HEADLINES
+  // ===============================
+
+  const directParams =
     new URLSearchParams({
       country:
         requestedCountry,
@@ -1411,39 +1460,47 @@ if (requestedCountry) {
         process.env.NEWS_API_KEY
     });
 
+
   if (category) {
-    params.set(
+
+    directParams.set(
       "category",
       category
     );
   }
 
-  const response =
+
+  const directResponse =
     await fetch(
-      `https://newsapi.org/v2/top-headlines?${params.toString()}`
+      `https://newsapi.org/v2/top-headlines?${directParams.toString()}`
     );
 
-  const data =
-    await response.json();
+
+  const directData =
+    await directResponse.json();
+
 
   if (
-    !response.ok ||
-    data.status === "error"
+    !directResponse.ok ||
+    directData.status === "error"
   ) {
 
     console.error(
-      "COUNTRY NEWS API ERROR:",
+      "COUNTRY NEWS DIRECT API ERROR:",
       {
         country:
           requestedCountry,
+
         category,
-        data
+
+        data:
+          directData
       }
     );
 
     return res.status(502).json({
       error:
-        data.message ||
+        directData.message ||
         "Country news API error",
 
       country:
@@ -1456,46 +1513,15 @@ if (requestedCountry) {
     });
   }
 
-  const articles =
-    (data.articles || [])
-      .filter(article => {
 
-        const title =
-          String(
-            article?.title || ""
-          ).trim();
+  const directArticles =
+    normalizeCountryArticles(
+      directData.articles
+    );
 
-        return (
-          title &&
-          title !== "[Removed]"
-        );
-      })
-      .slice(0, 8)
-      .map(article => ({
-        title:
-          String(
-            article.title || ""
-          ).trim(),
-
-        description:
-          String(
-            article.description || ""
-          ).trim() || null,
-
-        source:
-          String(
-            article.source?.name ||
-            ""
-          ).trim() ||
-          "Unknown source",
-
-        publishedAt:
-          article.publishedAt ||
-          null
-      }));
 
   console.log(
-    "COUNTRY NEWS:",
+    "COUNTRY NEWS DIRECT:",
     {
       country:
         requestedCountry,
@@ -1504,9 +1530,272 @@ if (requestedCountry) {
         category || "general",
 
       returned:
-        articles.length
+        directArticles.length
     }
   );
+
+
+  /*
+   * If the normal country endpoint works,
+   * use it immediately.
+   */
+  if (
+    directArticles.length > 0
+  ) {
+
+    return res.json({
+      country:
+        requestedCountry,
+
+      category:
+        category || null,
+
+      retrieval:
+        "country",
+
+      articles:
+        directArticles
+    });
+  }
+
+
+  // ===============================
+  // STEP 2
+  // COUNTRY SOURCES FALLBACK
+  // ===============================
+
+  console.log(
+    "COUNTRY NEWS FALLBACK START:",
+    {
+      country:
+        requestedCountry,
+
+      category:
+        category || "general"
+    }
+  );
+
+
+  const sourceParams =
+    new URLSearchParams({
+      country:
+        requestedCountry,
+
+      apiKey:
+        process.env.NEWS_API_KEY
+    });
+
+
+  /*
+   * Here category is allowed because
+   * we are selecting SOURCES.
+   */
+  if (category) {
+
+    sourceParams.set(
+      "category",
+      category
+    );
+  }
+
+
+  const sourcesResponse =
+    await fetch(
+      `https://newsapi.org/v2/top-headlines/sources?${sourceParams.toString()}`
+    );
+
+
+  const sourcesData =
+    await sourcesResponse.json();
+
+
+  if (
+    !sourcesResponse.ok ||
+    sourcesData.status === "error"
+  ) {
+
+    console.error(
+      "COUNTRY NEWS SOURCES ERROR:",
+      {
+        country:
+          requestedCountry,
+
+        category,
+
+        data:
+          sourcesData
+      }
+    );
+
+    return res.json({
+      country:
+        requestedCountry,
+
+      category:
+        category || null,
+
+      retrieval:
+        "country_empty",
+
+      articles: []
+    });
+  }
+
+
+  /*
+   * NewsAPI accepts maximum 20 source IDs
+   * in an Everything request, and keeping
+   * the list compact is useful here too.
+   */
+  const sourceIds =
+    (sourcesData.sources || [])
+      .map(source =>
+        String(
+          source?.id || ""
+        ).trim()
+      )
+      .filter(Boolean)
+      .slice(0, 20);
+
+
+  console.log(
+    "COUNTRY NEWS SOURCES:",
+    {
+      country:
+        requestedCountry,
+
+      category:
+        category || "general",
+
+      sources:
+        sourceIds.length,
+
+      sourceIds
+    }
+  );
+
+
+  /*
+   * No publisher available for that
+   * country/category.
+   */
+  if (
+    sourceIds.length === 0
+  ) {
+
+    return res.json({
+      country:
+        requestedCountry,
+
+      category:
+        category || null,
+
+      retrieval:
+        "no_country_sources",
+
+      articles: []
+    });
+  }
+
+
+  // ===============================
+  // STEP 3
+  // HEADLINES FROM COUNTRY SOURCES
+  // ===============================
+
+  const fallbackParams =
+    new URLSearchParams({
+
+      sources:
+        sourceIds.join(","),
+
+      pageSize: "12",
+
+      apiKey:
+        process.env.NEWS_API_KEY
+    });
+
+
+  /*
+   * IMPORTANT:
+   *
+   * Do NOT put country or category here.
+   *
+   * NewsAPI does not allow "sources"
+   * together with country/category.
+   *
+   * The sources were already selected
+   * above using country/category.
+   */
+  const fallbackResponse =
+    await fetch(
+      `https://newsapi.org/v2/top-headlines?${fallbackParams.toString()}`
+    );
+
+
+  const fallbackData =
+    await fallbackResponse.json();
+
+
+  if (
+    !fallbackResponse.ok ||
+    fallbackData.status === "error"
+  ) {
+
+    console.error(
+      "COUNTRY NEWS FALLBACK API ERROR:",
+      {
+        country:
+          requestedCountry,
+
+        category,
+
+        sources:
+          sourceIds,
+
+        data:
+          fallbackData
+      }
+    );
+
+    return res.json({
+      country:
+        requestedCountry,
+
+      category:
+        category || null,
+
+      retrieval:
+        "sources_failed",
+
+      articles: []
+    });
+  }
+
+
+  const fallbackArticles =
+    normalizeCountryArticles(
+      fallbackData.articles
+    );
+
+
+  console.log(
+    "COUNTRY NEWS FALLBACK RESULT:",
+    {
+      country:
+        requestedCountry,
+
+      category:
+        category || "general",
+
+      sources:
+        sourceIds.length,
+
+      returned:
+        fallbackArticles.length
+    }
+  );
+
 
   return res.json({
     country:
@@ -1515,7 +1804,11 @@ if (requestedCountry) {
     category:
       category || null,
 
-    articles
+    retrieval:
+      "country_sources",
+
+    articles:
+      fallbackArticles
   });
 }
 
