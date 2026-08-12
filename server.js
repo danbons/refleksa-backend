@@ -1098,6 +1098,7 @@ app.get("/weather", requirePrototypeToken, async (_req, res) => {
 // NEWS
 // ===============================
 let worldNewsCache = {
+  key: "",
   expiresAt: 0,
   articles: []
 };
@@ -1116,12 +1117,72 @@ app.get("/news", requirePrototypeToken, async (req, res) => {
     .trim()
     .toLowerCase();
 
+    const requestedCountry =
+  String(req.query.country || "")
+    .trim()
+    .toLowerCase();
+
+const requestedCategory =
+  String(req.query.category || "")
+    .trim()
+    .toLowerCase();
+
+const allowedCategories =
+  new Set([
+    "general",
+    "business",
+    "entertainment",
+    "health",
+    "science",
+    "sports",
+    "technology"
+  ]);
+
+const category =
+  requestedCategory === ""
+    ? ""
+    : allowedCategories.has(
+        requestedCategory
+      )
+        ? requestedCategory
+        : null;
+
+if (category === null) {
+  return res.status(400).json({
+    error: "Invalid news category.",
+    articles: []
+  });
+}
+
+if (
+  requestedCountry &&
+  !/^[a-z]{2}$/.test(
+    requestedCountry
+  )
+) {
+  return res.status(400).json({
+    error: "Invalid country code.",
+    articles: []
+  });
+}
+
+  
+
     // ===============================
 // WORLD NEWS
 // ===============================
-if (requestedScope === "world") {
+if (
+  requestedScope === "world" ||
+  (
+    !cleanQuery &&
+    !requestedCountry &&
+    category
+  )
+) {
 
   const now = Date.now();
+  const worldCacheKey =
+  category || "general";
 
   /*
    * Reuse the latest world briefing for
@@ -1130,15 +1191,19 @@ if (requestedScope === "world") {
    * NewsAPI calls.
    */
   if (
-    worldNewsCache.expiresAt > now &&
-    worldNewsCache.articles.length > 0
-  ) {
+  worldNewsCache.key ===
+    worldCacheKey &&
+  worldNewsCache.expiresAt > now &&
+  worldNewsCache.articles.length > 0
+) {
     return res.json({
-      scope: "world",
-      cached: true,
-      articles:
-        worldNewsCache.articles
-    });
+  scope: "world",
+  category:
+    category || null,
+  cached: true,
+  articles:
+    worldNewsCache.articles
+});
   }
 
   const countries = [
@@ -1166,6 +1231,12 @@ if (requestedScope === "world") {
                 apiKey:
                   process.env.NEWS_API_KEY
               });
+            if (category) {
+  params.set(
+    "category",
+    category
+  );
+}
 
             const response =
               await fetch(
@@ -1295,12 +1366,15 @@ if (requestedScope === "world") {
       .slice(0, 12);
 
   worldNewsCache = {
-    expiresAt:
-      now +
-      WORLD_NEWS_CACHE_MS,
+  key:
+    worldCacheKey,
 
-    articles
-  };
+  expiresAt:
+    now +
+    WORLD_NEWS_CACHE_MS,
+
+  articles
+};
 
   console.log(
     "WORLD NEWS:",
@@ -1313,8 +1387,134 @@ if (requestedScope === "world") {
   );
 
   return res.json({
-    scope: "world",
-    cached: false,
+  scope: "world",
+  category:
+    category || null,
+  cached: false,
+  articles
+});
+  
+}
+  // ===============================
+// COUNTRY NEWS
+// ===============================
+if (requestedCountry) {
+
+  const params =
+    new URLSearchParams({
+      country:
+        requestedCountry,
+
+      pageSize: "8",
+
+      apiKey:
+        process.env.NEWS_API_KEY
+    });
+
+  if (category) {
+    params.set(
+      "category",
+      category
+    );
+  }
+
+  const response =
+    await fetch(
+      `https://newsapi.org/v2/top-headlines?${params.toString()}`
+    );
+
+  const data =
+    await response.json();
+
+  if (
+    !response.ok ||
+    data.status === "error"
+  ) {
+
+    console.error(
+      "COUNTRY NEWS API ERROR:",
+      {
+        country:
+          requestedCountry,
+        category,
+        data
+      }
+    );
+
+    return res.status(502).json({
+      error:
+        data.message ||
+        "Country news API error",
+
+      country:
+        requestedCountry,
+
+      category:
+        category || null,
+
+      articles: []
+    });
+  }
+
+  const articles =
+    (data.articles || [])
+      .filter(article => {
+
+        const title =
+          String(
+            article?.title || ""
+          ).trim();
+
+        return (
+          title &&
+          title !== "[Removed]"
+        );
+      })
+      .slice(0, 8)
+      .map(article => ({
+        title:
+          String(
+            article.title || ""
+          ).trim(),
+
+        description:
+          String(
+            article.description || ""
+          ).trim() || null,
+
+        source:
+          String(
+            article.source?.name ||
+            ""
+          ).trim() ||
+          "Unknown source",
+
+        publishedAt:
+          article.publishedAt ||
+          null
+      }));
+
+  console.log(
+    "COUNTRY NEWS:",
+    {
+      country:
+        requestedCountry,
+
+      category:
+        category || "general",
+
+      returned:
+        articles.length
+    }
+  );
+
+  return res.json({
+    country:
+      requestedCountry,
+
+    category:
+      category || null,
+
     articles
   });
 }
