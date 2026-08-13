@@ -328,11 +328,20 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
           "Accept": "audio/mpeg"
         },
         body: JSON.stringify({
-          text: cleanText,
-          model_id: "eleven_flash_v2_5",
-          optimize_streaming_latency: 0,
-          output_format: "mp3_44100_128"
-        })
+  text: cleanText,
+  model_id: "eleven_flash_v2_5",
+
+  voice_settings: {
+    stability: 0.72,
+    similarity_boost: 0.80,
+    style: 0.0,
+    use_speaker_boost: true,
+    speed: 0.98
+  },
+
+  optimize_streaming_latency: 0,
+  output_format: "mp3_44100_128"
+})
       }
     );
 
