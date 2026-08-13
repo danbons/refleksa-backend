@@ -304,7 +304,7 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
 // ===============================
 app.post("/tts", requirePrototypeToken, async (req, res) => {
   try {
-    const { text } = req.body || {};
+    const { text, voice_period } = req.body || {};
     const cleanText = String(text || "").trim();
 
     if (!cleanText) {
@@ -317,6 +317,51 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
       textLength: cleanText.length,
       time: new Date().toISOString()
     });
+
+    const voicePeriod = String(voice_period || "DAY").toUpperCase();
+
+const voiceProfiles = {
+  EARLY_MORNING: {
+    stability: 0.78,
+    similarity_boost: 0.80,
+    style: 0.0,
+    use_speaker_boost: true,
+    speed: 0.96
+  },
+
+  DAY: {
+    stability: 0.72,
+    similarity_boost: 0.80,
+    style: 0.0,
+    use_speaker_boost: true,
+    speed: 0.98
+  },
+
+  EVENING: {
+    stability: 0.76,
+    similarity_boost: 0.80,
+    style: 0.0,
+    use_speaker_boost: true,
+    speed: 0.96
+  },
+
+  NIGHT: {
+    stability: 0.82,
+    similarity_boost: 0.80,
+    style: 0.0,
+    use_speaker_boost: true,
+    speed: 0.93
+  }
+};
+
+const voiceSettings =
+  voiceProfiles[voicePeriod] ||
+  voiceProfiles.DAY;
+
+console.log("TTS VOICE PROFILE:", {
+  period: voicePeriod,
+  settings: voiceSettings
+});
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream`,
@@ -331,13 +376,7 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
   text: cleanText,
   model_id: "eleven_flash_v2_5",
 
-  voice_settings: {
-    stability: 0.82,
-    similarity_boost: 0.80,
-    style: 0.0,
-    use_speaker_boost: true,
-    speed: 0.98
-  },
+  voice_settings: voiceSettings,
 
   optimize_streaming_latency: 0,
   output_format: "mp3_44100_128"
