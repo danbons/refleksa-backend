@@ -305,63 +305,71 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
 app.post("/tts", requirePrototypeToken, async (req, res) => {
   try {
     const { text, voice_period } = req.body || {};
+
     const cleanText = String(text || "").trim();
 
     if (!cleanText) {
-      return res.status(400).json({ error: "Missing text." });
+      return res.status(400).json({
+        error: "Missing text."
+      });
     }
+
+    const voicePeriod =
+      String(voice_period || "DAY")
+        .trim()
+        .toUpperCase();
+
+    const voiceProfiles = {
+
+      EARLY_MORNING: {
+        stability: 0.86,
+        similarity_boost: 0.80,
+        style: 0.0,
+        use_speaker_boost: true,
+        speed: 0.96
+      },
+
+      DAY: {
+        stability: 0.82,
+        similarity_boost: 0.80,
+        style: 0.0,
+        use_speaker_boost: true,
+        speed: 0.98
+      },
+
+      EVENING: {
+        stability: 0.85,
+        similarity_boost: 0.80,
+        style: 0.0,
+        use_speaker_boost: true,
+        speed: 0.96
+      },
+
+      NIGHT: {
+        stability: 0.88,
+        similarity_boost: 0.80,
+        style: 0.0,
+        use_speaker_boost: true,
+        speed: 0.93
+      }
+    };
+
+    const voiceSettings =
+      voiceProfiles[voicePeriod] ||
+      voiceProfiles.DAY;
 
     console.log("TTS USED:", {
       device: req.prototypeDevice.deviceId,
       partner: req.prototypeDevice.partner,
       textLength: cleanText.length,
+      voicePeriod,
       time: new Date().toISOString()
     });
 
-    const voicePeriod = String(voice_period || "DAY").toUpperCase();
-
-const voiceProfiles = {
-  EARLY_MORNING: {
-    stability: 0.78,
-    similarity_boost: 0.80,
-    style: 0.0,
-    use_speaker_boost: true,
-    speed: 0.96
-  },
-
-  DAY: {
-    stability: 0.72,
-    similarity_boost: 0.80,
-    style: 0.0,
-    use_speaker_boost: true,
-    speed: 0.98
-  },
-
-  EVENING: {
-    stability: 0.76,
-    similarity_boost: 0.80,
-    style: 0.0,
-    use_speaker_boost: true,
-    speed: 0.96
-  },
-
-  NIGHT: {
-    stability: 0.82,
-    similarity_boost: 0.80,
-    style: 0.0,
-    use_speaker_boost: true,
-    speed: 0.93
-  }
-};
-
-const voiceSettings =
-  voiceProfiles[voicePeriod] ||
-  voiceProfiles.DAY;
-
-console.log("TTS VOICE PROFILE:", {
-  period: voicePeriod,
-  settings: voiceSettings
-});
+    console.log("TTS VOICE PROFILE:", {
+      period: voicePeriod,
+      settings: voiceSettings
+    });
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream`,
@@ -372,29 +380,48 @@ console.log("TTS VOICE PROFILE:", {
           "Content-Type": "application/json",
           "Accept": "audio/mpeg"
         },
+
         body: JSON.stringify({
-  text: cleanText,
-  model_id: "eleven_flash_v2_5",
+          text: cleanText,
 
-  voice_settings: voiceSettings,
+          model_id: "eleven_flash_v2_5",
 
-  optimize_streaming_latency: 0,
-  output_format: "mp3_44100_128"
-})
+          voice_settings: voiceSettings,
+
+          optimize_streaming_latency: 0,
+
+          output_format: "mp3_44100_128"
+        })
       }
     );
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("TTS ELEVENLABS ERROR:", err);
+
+      console.error(
+        "TTS ELEVENLABS ERROR:",
+        err
+      );
+
       return res.status(500).send(err);
     }
 
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
+    const audioBuffer =
+      Buffer.from(
+        await response.arrayBuffer()
+      );
 
-    if (!audioBuffer || audioBuffer.length === 0) {
-      console.error("TTS EMPTY AUDIO BUFFER");
-      return res.status(500).send("Empty TTS audio.");
+    if (
+      !audioBuffer ||
+      audioBuffer.length === 0
+    ) {
+      console.error(
+        "TTS EMPTY AUDIO BUFFER"
+      );
+
+      return res
+        .status(500)
+        .send("Empty TTS audio.");
     }
 
     console.log("TTS AUDIO READY:", {
@@ -402,13 +429,33 @@ console.log("TTS VOICE PROFILE:", {
       contentType: "audio/mpeg"
     });
 
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Length", audioBuffer.length);
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader(
+      "Content-Type",
+      "audio/mpeg"
+    );
+
+    res.setHeader(
+      "Content-Length",
+      audioBuffer.length
+    );
+
+    res.setHeader(
+      "Cache-Control",
+      "no-store"
+    );
+
     res.send(audioBuffer);
+
   } catch (err) {
-    console.error("TTS ERROR:", err);
-    res.status(500).send("TTS error");
+
+    console.error(
+      "TTS ERROR:",
+      err
+    );
+
+    res
+      .status(500)
+      .send("TTS error");
   }
 });
 
