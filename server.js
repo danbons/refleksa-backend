@@ -2836,30 +2836,684 @@ Required JSON shape:
 // ===============================
 // WEATHER
 // ===============================
-app.get("/weather", requirePrototypeToken, async (_req, res) => {
-  try {
-    const city = "Reading";
 
-    const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric`
+function parseWeatherLocation(req) {
+
+  const lat =
+    Number(
+      req.query.lat
     );
 
-    const data = await response.json();
+  const lon =
+    Number(
+      req.query.lon
+    );
 
-    if (!response.ok) {
-      console.error("WEATHER API ERROR:", data);
-      return res.status(500).send("Weather API error");
-    }
+  const hasCoordinates =
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180;
 
-    res.json({
-      temp: Math.round(data.main.temp),
-      condition: data.weather?.[0]?.description || "unknown"
-    });
-  } catch (err) {
-    console.error("WEATHER ERROR:", err);
-    res.status(500).send("Weather error");
+  if (hasCoordinates) {
+    return {
+      lat,
+      lon,
+      city: null
+    };
   }
-});
+
+  const requestedCity =
+    String(
+      req.query.city || ""
+    )
+      .trim()
+      .slice(0, 100);
+
+  return {
+    lat: null,
+    lon: null,
+
+    /*
+     * Temporary compatibility fallback.
+     *
+     * Android will shortly send the
+     * device's real coordinates.
+     */
+    city:
+      requestedCity ||
+      "Reading,GB"
+  };
+}
+
+
+function buildWeatherUrl(
+  endpoint,
+  location
+) {
+
+  const params =
+    new URLSearchParams({
+      appid:
+        process.env
+          .WEATHER_API_KEY,
+
+      units:
+        "metric"
+    });
+
+
+  if (
+    location.lat !== null &&
+    location.lon !== null
+  ) {
+
+    params.set(
+      "lat",
+      String(
+        location.lat
+      )
+    );
+
+    params.set(
+      "lon",
+      String(
+        location.lon
+      )
+    );
+
+  } else {
+
+    params.set(
+      "q",
+      location.city
+    );
+  }
+
+
+  return (
+    "https://api.openweathermap.org" +
+    `/data/2.5/${endpoint}?` +
+    params.toString()
+  );
+}
+
+
+app.get(
+  "/weather",
+  requirePrototypeToken,
+  async (req, res) => {
+
+    try {
+
+      if (
+        !process.env
+          .WEATHER_API_KEY
+      ) {
+
+        console.error(
+          "Missing WEATHER_API_KEY."
+        );
+
+        return res
+          .status(500)
+          .json({
+            success: false,
+            error:
+              "Weather configuration error."
+          });
+      }
+
+
+      const location =
+        parseWeatherLocation(
+          req
+        );
+
+
+      const url =
+        buildWeatherUrl(
+          "weather",
+          location
+        );
+
+
+      const response =
+        await fetch(url);
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+
+        console.error(
+          "WEATHER API ERROR:",
+          data
+        );
+
+        return res
+          .status(502)
+          .json({
+            success: false,
+            error:
+              "Weather provider error."
+          });
+      }
+
+
+      const cityName =
+        String(
+          data.name || ""
+        ).trim();
+
+
+      const country =
+        String(
+          data.sys?.country || ""
+        ).trim();
+
+
+      console.log(
+        "WEATHER CURRENT:",
+        {
+          location:
+            cityName,
+
+          country,
+
+          coordinates:
+            data.coord,
+
+          temp:
+            data.main?.temp,
+
+          condition:
+            data.weather?.[0]
+              ?.description
+        }
+      );
+
+
+      return res.json({
+        success: true,
+
+        location:
+          cityName ||
+          location.city ||
+          "Unknown",
+
+        country,
+
+        latitude:
+          Number(
+            data.coord?.lat
+          ),
+
+        longitude:
+          Number(
+            data.coord?.lon
+          ),
+
+        temp:
+          Math.round(
+            Number(
+              data.main?.temp || 0
+            )
+          ),
+
+        condition:
+          data.weather?.[0]
+            ?.description ||
+          "unknown",
+
+        weatherId:
+          Number(
+            data.weather?.[0]
+              ?.id || 0
+          ),
+
+        icon:
+          String(
+            data.weather?.[0]
+              ?.icon || ""
+          ),
+
+        timezoneOffsetSeconds:
+          Number(
+            data.timezone || 0
+          ),
+
+        updatedAt:
+          new Date()
+            .toISOString()
+      });
+
+    } catch (err) {
+
+      console.error(
+        "WEATHER ERROR:",
+        err
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error:
+            "Weather unavailable."
+        });
+    }
+  }
+);
+
+
+// ===============================
+// WEATHER FORECAST
+// ===============================
+
+app.get(
+  "/weather/forecast",
+  requirePrototypeToken,
+  async (req, res) => {
+
+    try {
+
+      if (
+        !process.env
+          .WEATHER_API_KEY
+      ) {
+
+        console.error(
+          "Missing WEATHER_API_KEY."
+        );
+
+        return res
+          .status(500)
+          .json({
+            success: false,
+            error:
+              "Weather configuration error.",
+            forecast: []
+          });
+      }
+
+
+      const location =
+        parseWeatherLocation(
+          req
+        );
+
+
+      const url =
+        buildWeatherUrl(
+          "forecast",
+          location
+        );
+
+
+      const response =
+        await fetch(url);
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+
+        console.error(
+          "WEATHER FORECAST API ERROR:",
+          data
+        );
+
+        return res
+          .status(502)
+          .json({
+            success: false,
+            error:
+              "Weather forecast provider error.",
+            forecast: []
+          });
+      }
+
+
+      const timezoneOffsetSeconds =
+        Number(
+          data.city?.timezone || 0
+        );
+
+
+      const nowLocal =
+        new Date(
+          Date.now() +
+          timezoneOffsetSeconds *
+            1000
+        );
+
+
+      const todayKey =
+        nowLocal
+          .toISOString()
+          .slice(
+            0,
+            10
+          );
+
+
+      const days =
+        new Map();
+
+
+      for (
+        const item of
+          Array.isArray(data.list)
+            ? data.list
+            : []
+      ) {
+
+        const timestamp =
+          Number(
+            item.dt || 0
+          );
+
+
+        if (!timestamp) {
+          continue;
+        }
+
+
+        const localDate =
+          new Date(
+            timestamp *
+              1000 +
+            timezoneOffsetSeconds *
+              1000
+          );
+
+
+        const dateKey =
+          localDate
+            .toISOString()
+            .slice(
+              0,
+              10
+            );
+
+
+        /*
+         * Home screen shows the NEXT
+         * five days, not today.
+         */
+        if (
+          dateKey <= todayKey
+        ) {
+          continue;
+        }
+
+
+        if (
+          !days.has(
+            dateKey
+          )
+        ) {
+
+          days.set(
+            dateKey,
+            {
+              date:
+                dateKey,
+
+              min:
+                Infinity,
+
+              max:
+                -Infinity,
+
+              samples: []
+            }
+          );
+        }
+
+
+        const day =
+          days.get(
+            dateKey
+          );
+
+
+        const min =
+          Number(
+            item.main
+              ?.temp_min
+          );
+
+
+        const max =
+          Number(
+            item.main
+              ?.temp_max
+          );
+
+
+        if (
+          Number.isFinite(
+            min
+          )
+        ) {
+          day.min =
+            Math.min(
+              day.min,
+              min
+            );
+        }
+
+
+        if (
+          Number.isFinite(
+            max
+          )
+        ) {
+          day.max =
+            Math.max(
+              day.max,
+              max
+            );
+        }
+
+
+        day.samples.push({
+          hour:
+            localDate
+              .getUTCHours(),
+
+          weatherId:
+            Number(
+              item.weather?.[0]
+                ?.id || 0
+            ),
+
+          condition:
+            String(
+              item.weather?.[0]
+                ?.description ||
+              "unknown"
+            ),
+
+          icon:
+            String(
+              item.weather?.[0]
+                ?.icon || ""
+            )
+        });
+      }
+
+
+      const forecast =
+        Array.from(
+          days.values()
+        )
+          .slice(
+            0,
+            5
+          )
+          .map(
+            day => {
+
+              /*
+               * Use the sample closest
+               * to midday as the visual
+               * representation of the day.
+               */
+              const representative =
+                day.samples
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      Math.abs(
+                        a.hour - 12
+                      ) -
+                      Math.abs(
+                        b.hour - 12
+                      )
+                  )[0] || {};
+
+
+              const date =
+                new Date(
+                  `${day.date}T12:00:00Z`
+                );
+
+
+              const weekday =
+                new Intl.DateTimeFormat(
+                  "en-GB",
+                  {
+                    weekday:
+                      "short",
+
+                    timeZone:
+                      "UTC"
+                  }
+                )
+                  .format(date);
+
+
+              return {
+                date:
+                  day.date,
+
+                day:
+                  weekday,
+
+                min:
+                  Number.isFinite(
+                    day.min
+                  )
+                    ? Math.round(
+                        day.min
+                      )
+                    : null,
+
+                max:
+                  Number.isFinite(
+                    day.max
+                  )
+                    ? Math.round(
+                        day.max
+                      )
+                    : null,
+
+                weatherId:
+                  representative
+                    .weatherId || 0,
+
+                condition:
+                  representative
+                    .condition ||
+                  "unknown",
+
+                icon:
+                  representative
+                    .icon ||
+                  ""
+              };
+            }
+          );
+
+
+      const cityName =
+        String(
+          data.city?.name || ""
+        ).trim();
+
+
+      console.log(
+        "WEATHER FORECAST:",
+        {
+          location:
+            cityName,
+
+          days:
+            forecast.length,
+
+          forecast
+        }
+      );
+
+
+      return res.json({
+        success: true,
+
+        location:
+          cityName ||
+          location.city ||
+          "Unknown",
+
+        country:
+          String(
+            data.city?.country ||
+            ""
+          ),
+
+        latitude:
+          Number(
+            data.city?.coord?.lat
+          ),
+
+        longitude:
+          Number(
+            data.city?.coord?.lon
+          ),
+
+        forecast,
+
+        updatedAt:
+          new Date()
+            .toISOString()
+      });
+
+    } catch (err) {
+
+      console.error(
+        "WEATHER FORECAST ERROR:",
+        err
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error:
+            "Weather forecast unavailable.",
+          forecast: []
+        });
+    }
+  }
+);
 
 // ===============================
 // NEWS — THE NEWS API
