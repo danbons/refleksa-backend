@@ -5,6 +5,10 @@ import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import jwt from "jsonwebtoken";
+import {
+  toWords,
+  toOrdinal
+} from "to-words";
 
 const app = express();
 
@@ -300,6 +304,1635 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
 });
 
 // ===============================
+// SPEECH NORMALIZATION
+// ===============================
+
+const SPEECH_LOCALES = {
+  it: "it-IT",
+  en: "en-GB",
+  ro: "ro-RO",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  pt: "pt-PT",
+  pl: "pl-PL",
+  bg: "bg-BG",
+  hu: "hu-HU",
+  ar: "ar-SA",
+  zh: "zh-CN"
+};
+
+
+const SPEECH_WORDS = {
+
+  it: {
+    percent: "per cento",
+    plus: "più",
+    minus: "meno",
+    equals: "uguale",
+    multiply: "per",
+    divide: "diviso",
+    celsius: "gradi Celsius",
+    fahrenheit: "gradi Fahrenheit",
+    poundSingular: "sterlina",
+    poundPlural: "sterline",
+    dollarSingular: "dollaro",
+    dollarPlural: "dollari",
+    euroSingular: "euro",
+    euroPlural: "euro"
+  },
+
+  en: {
+    percent: "percent",
+    plus: "plus",
+    minus: "minus",
+    equals: "equals",
+    multiply: "times",
+    divide: "divided by",
+    celsius: "degrees Celsius",
+    fahrenheit: "degrees Fahrenheit",
+    poundSingular: "pound",
+    poundPlural: "pounds",
+    dollarSingular: "dollar",
+    dollarPlural: "dollars",
+    euroSingular: "euro",
+    euroPlural: "euros"
+  },
+
+  ro: {
+    percent: "la sută",
+    plus: "plus",
+    minus: "minus",
+    equals: "egal",
+    multiply: "ori",
+    divide: "împărțit la",
+    celsius: "grade Celsius",
+    fahrenheit: "grade Fahrenheit",
+    poundSingular: "liră sterlină",
+    poundPlural: "lire sterline",
+    dollarSingular: "dolar",
+    dollarPlural: "dolari",
+    euroSingular: "euro",
+    euroPlural: "euro"
+  },
+
+  es: {
+    percent: "por ciento",
+    plus: "más",
+    minus: "menos",
+    equals: "igual a",
+    multiply: "por",
+    divide: "dividido por",
+    celsius: "grados Celsius",
+    fahrenheit: "grados Fahrenheit",
+    poundSingular: "libra",
+    poundPlural: "libras",
+    dollarSingular: "dólar",
+    dollarPlural: "dólares",
+    euroSingular: "euro",
+    euroPlural: "euros"
+  },
+
+  fr: {
+    percent: "pour cent",
+    plus: "plus",
+    minus: "moins",
+    equals: "égale",
+    multiply: "fois",
+    divide: "divisé par",
+    celsius: "degrés Celsius",
+    fahrenheit: "degrés Fahrenheit",
+    poundSingular: "livre sterling",
+    poundPlural: "livres sterling",
+    dollarSingular: "dollar",
+    dollarPlural: "dollars",
+    euroSingular: "euro",
+    euroPlural: "euros"
+  },
+
+  de: {
+    percent: "Prozent",
+    plus: "plus",
+    minus: "minus",
+    equals: "gleich",
+    multiply: "mal",
+    divide: "geteilt durch",
+    celsius: "Grad Celsius",
+    fahrenheit: "Grad Fahrenheit",
+    poundSingular: "Pfund",
+    poundPlural: "Pfund",
+    dollarSingular: "Dollar",
+    dollarPlural: "Dollar",
+    euroSingular: "Euro",
+    euroPlural: "Euro"
+  },
+
+  pt: {
+    percent: "por cento",
+    plus: "mais",
+    minus: "menos",
+    equals: "igual a",
+    multiply: "vezes",
+    divide: "dividido por",
+    celsius: "graus Celsius",
+    fahrenheit: "graus Fahrenheit",
+    poundSingular: "libra",
+    poundPlural: "libras",
+    dollarSingular: "dólar",
+    dollarPlural: "dólares",
+    euroSingular: "euro",
+    euroPlural: "euros"
+  }
+};
+
+
+function getSpeechLocale(
+  languageCode
+) {
+
+  const language =
+    String(
+      languageCode || "en"
+    )
+      .trim()
+      .toLowerCase()
+      .split("-")[0];
+
+
+  return (
+    SPEECH_LOCALES[language] ||
+    "en-GB"
+  );
+}
+
+
+function getSpeechLanguage(
+  languageCode
+) {
+
+  return String(
+    languageCode || "en"
+  )
+    .trim()
+    .toLowerCase()
+    .split("-")[0];
+}
+
+
+function lowerSpeechWords(
+  value,
+  locale
+) {
+
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLocaleLowerCase(
+      locale
+    );
+}
+
+
+function numberToSpeechWords(
+  value,
+  languageCode
+) {
+
+  const locale =
+    getSpeechLocale(
+      languageCode
+    );
+
+
+  try {
+
+    return lowerSpeechWords(
+      toWords(
+        value,
+        {
+          localeCode:
+            locale
+        }
+      ),
+      locale
+    );
+
+  } catch (error) {
+
+    console.warn(
+      "TTS NUMBER NORMALIZATION FALLBACK:",
+      {
+        value,
+        locale,
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
+
+
+    return String(
+      value
+    );
+  }
+}
+
+
+function ordinalToSpeechWords(
+  value,
+  languageCode
+) {
+
+  const locale =
+    getSpeechLocale(
+      languageCode
+    );
+
+
+  try {
+
+    return lowerSpeechWords(
+      toOrdinal(
+        value,
+        {
+          localeCode:
+            locale
+        }
+      ),
+      locale
+    );
+
+  } catch (error) {
+
+    console.warn(
+      "TTS ORDINAL NORMALIZATION FALLBACK:",
+      {
+        value,
+        locale,
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
+
+
+    return numberToSpeechWords(
+      value,
+      languageCode
+    );
+  }
+}
+
+
+function normalizeNumericString(
+  rawValue,
+  languageCode
+) {
+
+  const language =
+    getSpeechLanguage(
+      languageCode
+    );
+
+
+  let value =
+    String(
+      rawValue || ""
+    )
+      .trim()
+      .replace(
+        /\s+/g,
+        ""
+      );
+
+
+  if (!value) {
+    return value;
+  }
+
+
+  const sign =
+    value.startsWith("-")
+      ? "-"
+      : value.startsWith("+")
+        ? "+"
+        : "";
+
+
+  if (
+    sign
+  ) {
+
+    value =
+      value.slice(
+        1
+      );
+  }
+
+
+  const commaCount =
+    (
+      value.match(
+        /,/g
+      ) || []
+    ).length;
+
+
+  const dotCount =
+    (
+      value.match(
+        /\./g
+      ) || []
+    ).length;
+
+
+  /*
+   * Both separators exist.
+   *
+   * The final separator is treated
+   * as the decimal separator.
+   *
+   * Examples:
+   *
+   * 1,234.56
+   * 1.234,56
+   */
+  if (
+    commaCount > 0 &&
+    dotCount > 0
+  ) {
+
+    const lastComma =
+      value.lastIndexOf(
+        ","
+      );
+
+
+    const lastDot =
+      value.lastIndexOf(
+        "."
+      );
+
+
+    if (
+      lastComma >
+      lastDot
+    ) {
+
+      value =
+        value
+          .replace(
+            /\./g,
+            ""
+          )
+          .replace(
+            ",",
+            "."
+          );
+
+    } else {
+
+      value =
+        value.replace(
+          /,/g,
+          ""
+        );
+    }
+
+
+  } else if (
+    commaCount > 0
+  ) {
+
+    const parts =
+      value.split(
+        ","
+      );
+
+
+    const looksGrouped =
+      (
+        parts.length > 2 &&
+        parts
+          .slice(1)
+          .every(
+            part =>
+              part.length === 3
+          )
+      ) ||
+      (
+        parts.length === 2 &&
+        parts[1].length === 3 &&
+        language === "en"
+      );
+
+
+    if (
+      looksGrouped
+    ) {
+
+      value =
+        parts.join(
+          ""
+        );
+
+    } else {
+
+      /*
+       * Treat comma as decimal.
+       *
+       * Example:
+       * 23,5
+       */
+      value =
+        value.replace(
+          ",",
+          "."
+        );
+    }
+
+
+  } else if (
+    dotCount > 0
+  ) {
+
+    const parts =
+      value.split(
+        "."
+      );
+
+
+    const dotGroupingLanguages =
+      new Set([
+        "it",
+        "de",
+        "es",
+        "pt",
+        "ro"
+      ]);
+
+
+    const looksGrouped =
+      (
+        parts.length > 2 &&
+        parts
+          .slice(1)
+          .every(
+            part =>
+              part.length === 3
+          )
+      ) ||
+      (
+        parts.length === 2 &&
+        parts[1].length === 3 &&
+        dotGroupingLanguages.has(
+          language
+        )
+      );
+
+
+    if (
+      looksGrouped
+    ) {
+
+      value =
+        parts.join(
+          ""
+        );
+    }
+  }
+
+
+  return (
+    sign +
+    value
+  );
+}
+
+
+function numericTokenToSpeech(
+  rawValue,
+  languageCode
+) {
+
+  const normalized =
+    normalizeNumericString(
+      rawValue,
+      languageCode
+    );
+
+
+  if (!normalized) {
+    return rawValue;
+  }
+
+
+  return numberToSpeechWords(
+    normalized,
+    languageCode
+  );
+}
+
+
+function romanToInteger(
+  roman
+) {
+
+  const value =
+    String(
+      roman || ""
+    )
+      .trim()
+      .toUpperCase();
+
+
+  /*
+   * Canonical Roman numerals,
+   * from 1 to 3999.
+   */
+  const canonicalRoman =
+    /^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/;
+
+
+  if (
+    !value ||
+    !canonicalRoman.test(
+      value
+    )
+  ) {
+
+    return null;
+  }
+
+
+  const values = {
+    I: 1,
+    V: 5,
+    X: 10,
+    L: 50,
+    C: 100,
+    D: 500,
+    M: 1000
+  };
+
+
+  let total = 0;
+
+
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
+
+    const current =
+      values[
+        value[index]
+      ];
+
+
+    const next =
+      values[
+        value[index + 1]
+      ] || 0;
+
+
+    if (
+      current <
+      next
+    ) {
+
+      total -=
+        current;
+
+    } else {
+
+      total +=
+        current;
+    }
+  }
+
+
+  return total;
+}
+
+
+function normalizeRomanNumerals(
+  text,
+  languageCode
+) {
+
+  return String(
+    text || ""
+  ).replace(
+    /\b[IVXLCDM]+\b/g,
+    (
+      token,
+      offset,
+      fullText
+    ) => {
+
+      const number =
+        romanToInteger(
+          token
+        );
+
+
+      if (
+        number === null
+      ) {
+        return token;
+      }
+
+
+      const before =
+        fullText
+          .slice(
+            Math.max(
+              0,
+              offset - 55
+            ),
+            offset
+          )
+          .toLowerCase();
+
+
+      const after =
+        fullText
+          .slice(
+            offset +
+              token.length,
+            offset +
+              token.length +
+              35
+          )
+          .toLowerCase();
+
+
+      /*
+       * Regnal / papal numbers
+       * and centuries are ordinal.
+       *
+       * Examples:
+       *
+       * Papa Leone XIV
+       * Pope Leo XIV
+       * King Charles III
+       * XIV secolo
+       * 21st century equivalent
+       */
+      const ordinalContext =
+        /(?:papa|pope|king|queen|re|regina|emperor|imperatore|prince|principe)\b[^.!?]{0,35}$/i
+          .test(
+            before
+          ) ||
+        /^\s*(?:secolo|century|siècle|siglo|jahrhundert)\b/i
+          .test(
+            after
+          );
+
+
+      /*
+       * Chapters, books, volumes etc.
+       * are normally spoken as
+       * cardinal numbers.
+       */
+      const cardinalContext =
+        /(?:capitolo|chapter|volume|libro|book|atto|act|parte|part|world war|guerra mondiale)\b[^.!?]{0,30}$/i
+          .test(
+            before
+          );
+
+
+      /*
+       * Do NOT blindly convert every
+       * uppercase Roman-looking word.
+       *
+       * Example:
+       *
+       * MIX
+       *
+       * is technically a valid Roman
+       * number but may simply be the
+       * English word "mix".
+       */
+      if (
+        !ordinalContext &&
+        !cardinalContext
+      ) {
+
+        return token;
+      }
+
+
+      if (
+        ordinalContext
+      ) {
+
+        return ordinalToSpeechWords(
+          number,
+          languageCode
+        );
+      }
+
+
+      return numberToSpeechWords(
+        number,
+        languageCode
+      );
+    }
+  );
+}
+
+
+function getMonthNameForSpeech(
+  month,
+  languageCode
+) {
+
+  const locale =
+    getSpeechLocale(
+      languageCode
+    );
+
+
+  try {
+
+    return new Intl.DateTimeFormat(
+      locale,
+      {
+        month:
+          "long",
+
+        timeZone:
+          "UTC"
+      }
+    ).format(
+      new Date(
+        Date.UTC(
+          2020,
+          month - 1,
+          1
+        )
+      )
+    );
+
+  } catch {
+
+    return String(
+      month
+    );
+  }
+}
+
+
+function isValidSpeechDate(
+  day,
+  month,
+  year
+) {
+
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year)
+  ) {
+
+    return false;
+  }
+
+
+  if (
+    year < 1 ||
+    year > 9999 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+
+    return false;
+  }
+
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+
+  return (
+    date.getUTCFullYear() ===
+      year &&
+    date.getUTCMonth() ===
+      month - 1 &&
+    date.getUTCDate() ===
+      day
+  );
+}
+
+
+function dateToSpeech(
+  day,
+  month,
+  year,
+  languageCode
+) {
+
+  if (
+    !isValidSpeechDate(
+      day,
+      month,
+      year
+    )
+  ) {
+
+    return null;
+  }
+
+
+  const language =
+    getSpeechLanguage(
+      languageCode
+    );
+
+
+  const monthName =
+    getMonthNameForSpeech(
+      month,
+      languageCode
+    );
+
+
+  const yearWords =
+    numberToSpeechWords(
+      year,
+      languageCode
+    );
+
+
+  /*
+   * English dates are naturally
+   * ordinal:
+   *
+   * 14 August
+   * -> fourteenth of August
+   */
+  if (
+    language === "en"
+  ) {
+
+    return (
+      ordinalToSpeechWords(
+        day,
+        languageCode
+      ) +
+      " of " +
+      monthName +
+      " " +
+      yearWords
+    );
+  }
+
+
+  /*
+   * Italian normally uses
+   * "primo" only for day 1.
+   *
+   * Other days are cardinal.
+   */
+  if (
+    language === "it" &&
+    day === 1
+  ) {
+
+    return (
+      ordinalToSpeechWords(
+        day,
+        languageCode
+      ) +
+      " " +
+      monthName +
+      " " +
+      yearWords
+    );
+  }
+
+
+  return (
+    numberToSpeechWords(
+      day,
+      languageCode
+    ) +
+    " " +
+    monthName +
+    " " +
+    yearWords
+  );
+}
+
+
+function timeToSpeech(
+  hour,
+  minute,
+  languageCode
+) {
+
+  const language =
+    getSpeechLanguage(
+      languageCode
+    );
+
+
+  const hourWords =
+    numberToSpeechWords(
+      hour,
+      languageCode
+    );
+
+
+  if (
+    minute === 0
+  ) {
+
+    return hourWords;
+  }
+
+
+  /*
+   * Italian:
+   *
+   * 16:30
+   * -> sedici e trenta
+   */
+  if (
+    language === "it"
+  ) {
+
+    return (
+      hourWords +
+      " e " +
+      numberToSpeechWords(
+        minute,
+        languageCode
+      )
+    );
+  }
+
+
+  /*
+   * English digital clock:
+   *
+   * 16:05
+   * -> sixteen oh five
+   */
+  if (
+    language === "en" &&
+    minute < 10
+  ) {
+
+    return (
+      hourWords +
+      " oh " +
+      numberToSpeechWords(
+        minute,
+        languageCode
+      )
+    );
+  }
+
+
+  return (
+    hourWords +
+    " " +
+    numberToSpeechWords(
+      minute,
+      languageCode
+    )
+  );
+}
+
+
+function digitsToSpeech(
+  rawValue,
+  languageCode
+) {
+
+  const language =
+    getSpeechLanguage(
+      languageCode
+    );
+
+
+  const words =
+    SPEECH_WORDS[language] ||
+    SPEECH_WORDS.en;
+
+
+  const value =
+    String(
+      rawValue || ""
+    );
+
+
+  const result = [];
+
+
+  for (
+    const character of value
+  ) {
+
+    if (
+      /\d/.test(
+        character
+      )
+    ) {
+
+      result.push(
+        numberToSpeechWords(
+          Number(
+            character
+          ),
+          languageCode
+        )
+      );
+
+    } else if (
+      character === "+"
+    ) {
+
+      result.push(
+        words.plus
+      );
+    }
+  }
+
+
+  return result.join(
+    " "
+  );
+}
+
+
+function currencyToSpeech(
+  rawNumber,
+  symbol,
+  languageCode
+) {
+
+  const language =
+    getSpeechLanguage(
+      languageCode
+    );
+
+
+  const words =
+    SPEECH_WORDS[language] ||
+    SPEECH_WORDS.en;
+
+
+  const normalized =
+    normalizeNumericString(
+      rawNumber,
+      languageCode
+    );
+
+
+  const numericValue =
+    Number(
+      normalized
+    );
+
+
+  const singular =
+    Number.isFinite(
+      numericValue
+    ) &&
+    Math.abs(
+      numericValue
+    ) === 1;
+
+
+  let currencyWord;
+
+
+  switch (
+    symbol
+  ) {
+
+    case "£":
+
+      currencyWord =
+        singular
+          ? words.poundSingular
+          : words.poundPlural;
+
+      break;
+
+
+    case "$":
+
+      currencyWord =
+        singular
+          ? words.dollarSingular
+          : words.dollarPlural;
+
+      break;
+
+
+    case "€":
+
+      currencyWord =
+        singular
+          ? words.euroSingular
+          : words.euroPlural;
+
+      break;
+
+
+    default:
+
+      currencyWord =
+        symbol;
+  }
+
+
+  return (
+    numericTokenToSpeech(
+      rawNumber,
+      languageCode
+    ) +
+    " " +
+    currencyWord
+  );
+}
+
+
+function normalizeTextForSpeech(
+  text,
+  languageCode
+) {
+
+  const originalText =
+    String(
+      text || ""
+    );
+
+
+  if (
+    !originalText.trim()
+  ) {
+
+    return originalText;
+  }
+
+
+  const language =
+  getSpeechLanguage(
+    languageCode
+  );
+
+
+/*
+ * Safety fallback:
+ *
+ * Never normalize numbers using
+ * words from the wrong language.
+ *
+ * Languages without a complete
+ * Refleksa speech dictionary keep
+ * the original text for ElevenLabs.
+ */
+if (
+  !SPEECH_WORDS[
+    language
+  ]
+) {
+
+  return originalText
+    .trim();
+}
+
+
+const words =
+  SPEECH_WORDS[
+    language
+  ];
+
+
+  let spokenText =
+    originalText;
+
+
+  /*
+   * 1. ROMAN NUMERALS
+   *
+   * Papa Leo XIV
+   * -> Papa Leo quattordicesimo
+   */
+  spokenText =
+    normalizeRomanNumerals(
+      spokenText,
+      languageCode
+    );
+
+
+  /*
+   * 2. ISO DATES
+   *
+   * 2026-08-14
+   */
+  spokenText =
+    spokenText.replace(
+      /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g,
+      (
+        match,
+        year,
+        month,
+        day
+      ) => {
+
+        const converted =
+          dateToSpeech(
+            Number(day),
+            Number(month),
+            Number(year),
+            languageCode
+          );
+
+
+        return (
+          converted ||
+          match
+        );
+      }
+    );
+
+
+  /*
+   * 3. COMMON DATES
+   *
+   * 14/08/2026
+   * 14.08.2026
+   */
+  spokenText =
+    spokenText.replace(
+      /\b(\d{1,2})[/.](\d{1,2})[/.](\d{4})\b/g,
+      (
+        match,
+        day,
+        month,
+        year
+      ) => {
+
+        const converted =
+          dateToSpeech(
+            Number(day),
+            Number(month),
+            Number(year),
+            languageCode
+          );
+
+
+        return (
+          converted ||
+          match
+        );
+      }
+    );
+
+
+  /*
+   * 4. TIME
+   *
+   * 16:30
+   */
+  spokenText =
+    spokenText.replace(
+      /\b([01]?\d|2[0-3]):([0-5]\d)\b/g,
+      (
+        _match,
+        hour,
+        minute
+      ) =>
+        timeToSpeech(
+          Number(hour),
+          Number(minute),
+          languageCode
+        )
+    );
+
+
+  /*
+   * 5. TEMPERATURE
+   *
+   * 23°C
+   * 23,5 °C
+   * -4°F
+   */
+  spokenText =
+    spokenText.replace(
+      /(-?\d+(?:[.,]\d+)?)\s*°\s*([CF])\b/gi,
+      (
+        _match,
+        number,
+        scale
+      ) => {
+
+        const scaleWords =
+          String(scale)
+            .toUpperCase() ===
+          "F"
+            ? words.fahrenheit
+            : words.celsius;
+
+
+        return (
+          numericTokenToSpeech(
+            number,
+            languageCode
+          ) +
+          " " +
+          scaleWords
+        );
+      }
+    );
+
+
+  /*
+   * 6. CURRENCY — PREFIX
+   *
+   * £100
+   * $20.50
+   * €15
+   */
+  spokenText =
+    spokenText.replace(
+      /([£$€])\s*(-?\d+(?:[.,]\d+)*)/g,
+      (
+        _match,
+        symbol,
+        number
+      ) =>
+        currencyToSpeech(
+          number,
+          symbol,
+          languageCode
+        )
+    );
+
+
+  /*
+   * 7. CURRENCY — SUFFIX
+   *
+   * 100€
+   */
+  spokenText =
+    spokenText.replace(
+      /(-?\d+(?:[.,]\d+)*)\s*([£$€])/g,
+      (
+        _match,
+        number,
+        symbol
+      ) =>
+        currencyToSpeech(
+          number,
+          symbol,
+          languageCode
+        )
+    );
+
+
+  /*
+   * 8. PERCENTAGES
+   *
+   * 25%
+   * 12,5%
+   */
+  spokenText =
+    spokenText.replace(
+      /(-?\d+(?:[.,]\d+)*)\s*%/g,
+      (
+        _match,
+        number
+      ) =>
+        (
+          numericTokenToSpeech(
+            number,
+            languageCode
+          ) +
+          " " +
+          words.percent
+        )
+    );
+
+
+  /*
+   * 9. ARABIC ORDINALS
+   *
+   * 1°
+   * 14º
+   * 3rd
+   * 21st
+   */
+  spokenText =
+    spokenText.replace(
+      /\b(\d+)(?:°|º|ª)(?!\w)/g,
+      (
+        _match,
+        number
+      ) =>
+        ordinalToSpeechWords(
+          Number(number),
+          languageCode
+        )
+    );
+
+
+  spokenText =
+    spokenText.replace(
+      /\b(\d+)(st|nd|rd|th)\b/gi,
+      (
+        _match,
+        number
+      ) =>
+        ordinalToSpeechWords(
+          Number(number),
+          languageCode
+        )
+    );
+
+
+  /*
+   * 10. LONG DIGIT SEQUENCES
+   *
+   * Phone numbers, reference numbers,
+   * long IDs etc.
+   *
+   * Read digit by digit instead of:
+   *
+   * 07912345678
+   * -> seven billion...
+   */
+  spokenText =
+    spokenText.replace(
+      /(?<!\w)(\+?\d(?:[\s().-]*\d){6,})(?!\w)/g,
+      (
+        match
+      ) => {
+
+        const digitCount =
+          (
+            match.match(
+              /\d/g
+            ) || []
+          ).length;
+
+
+        if (
+  digitCount < 7
+) {
+
+  return match;
+}
+
+
+const compactDigits =
+  match.replace(
+    /\D/g,
+    ""
+  );
+
+
+const looksLikePhoneOrCode =
+  match
+    .trim()
+    .startsWith("+") ||
+  compactDigits
+    .startsWith("0") ||
+  /[\s().-]/.test(
+    match
+  );
+
+
+if (
+  !looksLikePhoneOrCode
+) {
+
+  /*
+   * This is probably a normal
+   * large number.
+   *
+   * Leave it untouched here.
+   * The normal integer conversion
+   * below will pronounce it as
+   * a number.
+   */
+  return match;
+}
+
+
+return digitsToSpeech(
+  match,
+  languageCode
+);
+      }
+    );
+
+
+  /*
+   * 11. DECIMAL / GROUPED NUMBERS
+   *
+   * 23.5
+   * 23,5
+   * 1,234.56
+   * 1.234,56
+   */
+  spokenText =
+    spokenText.replace(
+      /(?<![\w])[-+]?\d[\d.,]*[.,]\d+(?![\w])/g,
+      (
+        match
+      ) =>
+        numericTokenToSpeech(
+          match,
+          languageCode
+        )
+    );
+
+
+  /*
+   * 12. REMAINING INTEGER NUMBERS
+   *
+   * 14
+   * 117
+   * 2026
+   */
+  spokenText =
+    spokenText.replace(
+      /(?<![\w])[-+]?\d+(?![\w])/g,
+      (
+        match
+      ) =>
+        numericTokenToSpeech(
+          match,
+          languageCode
+        )
+    );
+
+
+  /*
+   * 13. BASIC MATHEMATICAL SYMBOLS
+   *
+   * Only replace operators surrounded
+   * by spaces, so punctuation and
+   * hyphenated words remain safe.
+   */
+  spokenText =
+    spokenText
+      .replace(
+        /\s+\+\s+/g,
+        ` ${words.plus} `
+      )
+      .replace(
+        /\s+-\s+/g,
+        ` ${words.minus} `
+      )
+      .replace(
+        /\s+=\s+/g,
+        ` ${words.equals} `
+      )
+      .replace(
+        /\s+[×*]\s+/g,
+        ` ${words.multiply} `
+      )
+      .replace(
+        /\s+÷\s+/g,
+        ` ${words.divide} `
+      );
+
+
+  /*
+   * Final whitespace cleanup.
+   */
+  spokenText =
+    spokenText
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+
+  return spokenText;
+}
+
+// ===============================
 // TTS - COMPATIBLE MP3 FULL BUFFER
 // ===============================
 app.post("/tts", requirePrototypeToken, async (req, res) => {
@@ -328,6 +1961,26 @@ const safeLanguageCode =
   /^[a-z]{2}$/.test(languageCode)
     ? languageCode
     : undefined;
+
+    const speechText =
+  normalizeTextForSpeech(
+    cleanText,
+    safeLanguageCode || "en"
+  );
+
+    console.log(
+  "TTS SPEECH NORMALIZATION:",
+  {
+    language:
+      safeLanguageCode || "en",
+
+    original:
+      cleanText,
+
+    spoken:
+      speechText
+  }
+);
 
     const voicePeriod =
       String(voice_period || "DAY")
@@ -397,13 +2050,13 @@ const safeLanguageCode =
         },
 
         body: JSON.stringify({
-  text: cleanText,
+  text: speechText,
 
   model_id: "eleven_flash_v2_5",
 
   language_code: safeLanguageCode,
 
-  apply_text_normalization: "on",
+  apply_text_normalization: "off",
 
   voice_settings: voiceSettings,
 
