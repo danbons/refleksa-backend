@@ -304,7 +304,11 @@ app.post("/session", requirePrototypeToken, async (req, res) => {
 // ===============================
 app.post("/tts", requirePrototypeToken, async (req, res) => {
   try {
-    const { text, voice_period } = req.body || {};
+    const {
+  text,
+  voice_period,
+  language_code
+} = req.body || {};
 
     const cleanText = String(text || "").trim();
 
@@ -313,6 +317,17 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
         error: "Missing text."
       });
     }
+
+    const languageCode =
+  String(language_code || "")
+    .trim()
+    .toLowerCase()
+    .split("-")[0];
+
+const safeLanguageCode =
+  /^[a-z]{2}$/.test(languageCode)
+    ? languageCode
+    : undefined;
 
     const voicePeriod =
       String(voice_period || "DAY")
@@ -382,18 +397,20 @@ app.post("/tts", requirePrototypeToken, async (req, res) => {
         },
 
         body: JSON.stringify({
-          text: cleanText,
+  text: cleanText,
 
-          model_id: "eleven_flash_v2_5",
+  model_id: "eleven_flash_v2_5",
 
-          voice_settings: voiceSettings,
+  language_code: safeLanguageCode,
 
-          optimize_streaming_latency: 0,
+  apply_text_normalization: "on",
 
-          output_format: "mp3_44100_128"
-        })
-      }
-    );
+  voice_settings: voiceSettings,
+
+  optimize_streaming_latency: 0,
+
+  output_format: "mp3_44100_128"
+})
 
     if (!response.ok) {
       const err = await response.text();
