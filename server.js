@@ -2099,6 +2099,289 @@ let articles =
 );
 
 // ===============================
+// CURRENT FACTS
+// ===============================
+app.post(
+  "/current-fact",
+  requirePrototypeToken,
+  async (req, res) => {
+    try {
+
+      const {
+        question,
+        language
+      } = req.body || {};
+
+      const cleanQuestion =
+        String(question || "")
+          .trim();
+
+      const cleanLanguage =
+        String(language || "same_as_user")
+          .trim();
+
+      if (!cleanQuestion) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing question."
+        });
+      }
+
+      console.log(
+        "CURRENT FACT USED:",
+        {
+          device:
+            req.prototypeDevice.deviceId,
+
+          partner:
+            req.prototypeDevice.partner,
+
+          question:
+            cleanQuestion,
+
+          language:
+            cleanLanguage,
+
+          time:
+            new Date().toISOString()
+        }
+      );
+
+
+      const response =
+        await fetch(
+          "https://api.openai.com/v1/responses",
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${process.env.OPENAI_API_KEY}`,
+
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+
+              model:
+                process.env
+                  .OPENAI_CURRENT_FACT_MODEL ||
+                "gpt-4.1-mini",
+
+              tools: [
+                {
+                  type: "web_search"
+                }
+              ],
+
+              /*
+               * This endpoint exists ONLY
+               * for facts that require
+               * current verification.
+               *
+               * Therefore searching is
+               * mandatory.
+               */
+              tool_choice:
+                "required",
+
+              input: [
+                {
+                  role: "system",
+
+                  content: [
+                    {
+                      type: "input_text",
+
+                      text: `
+You are Refleksa's Current Fact Engine.
+
+Current date:
+${new Date().toISOString().slice(0, 10)}
+
+Your job is to verify factual information
+that may have changed over time.
+
+This is NOT a news summarizer.
+
+Examples include:
+
+- current heads of state
+- current presidents
+- current prime ministers
+- current monarchs
+- current popes
+- current CEOs
+- current office holders
+- current political leaders
+- current sports champions
+- current product versions
+- latest released products
+- current organizational leadership
+- whether a public position or status
+  is still current
+
+Use live web information before answering.
+
+Return a short, factual and verified answer.
+
+Answer in:
+${cleanLanguage}
+
+IMPORTANT:
+
+- Do not frame the answer as "news"
+  unless the user explicitly asked for news.
+
+- Do not say "according to the latest news".
+
+- Do not explain that you searched the web.
+
+- Do not mention tools or internal systems.
+
+- Do not invent information.
+
+- If the current fact cannot be verified
+  reliably, say so briefly.
+
+- Keep the answer concise and suitable
+  for a natural spoken conversation.
+                      `.trim()
+                    }
+                  ]
+                },
+
+                {
+                  role: "user",
+
+                  content: [
+                    {
+                      type: "input_text",
+                      text: cleanQuestion
+                    }
+                  ]
+                }
+              ],
+
+              max_output_tokens: 180
+            })
+          }
+        );
+
+
+      const raw =
+        await response.text();
+
+
+      let data;
+
+      try {
+        data =
+          JSON.parse(raw);
+
+      } catch {
+
+        console.error(
+          "CURRENT FACT OPENAI PARSE ERROR:",
+          raw
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            "Current fact parse error."
+        });
+      }
+
+
+      if (!response.ok) {
+
+        console.error(
+          "CURRENT FACT OPENAI ERROR:",
+          data
+        );
+
+        return res.status(
+          response.status
+        ).json({
+          success: false,
+          error:
+            "Current fact lookup failed."
+        });
+      }
+
+
+      const answer =
+        data.output_text ||
+        data.output
+          ?.flatMap(
+            item =>
+              item.content || []
+          )
+          ?.find(
+            part =>
+              part.type ===
+              "output_text"
+          )
+          ?.text ||
+        "";
+
+
+      if (!answer.trim()) {
+
+        console.error(
+          "CURRENT FACT EMPTY ANSWER"
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            "Empty current fact answer."
+        });
+      }
+
+
+      console.log(
+        "CURRENT FACT SUCCESS:",
+        {
+          question:
+            cleanQuestion,
+
+          answerLength:
+            answer.length
+        }
+      );
+
+
+      return res.json({
+        success: true,
+
+        answer:
+          answer.trim(),
+
+        checkedAt:
+          new Date().toISOString()
+      });
+
+
+    } catch (err) {
+
+      console.error(
+        "CURRENT FACT ERROR:",
+        err
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          "Current fact unavailable."
+      });
+    }
+  }
+);
+
+// ===============================
 // TIME
 // ===============================
 app.get("/time", requirePrototypeToken, (_req, res) => {
