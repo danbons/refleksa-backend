@@ -2327,7 +2327,7 @@ app.post(
                   "basic",
 
                 max_results:
-                  5,
+                  3,
 
                 /*
                  * Tavily retrieves evidence.
@@ -2482,7 +2482,7 @@ app.post(
                   )
                   .slice(
                     0,
-                    700
+                    400
                   );
 
 
