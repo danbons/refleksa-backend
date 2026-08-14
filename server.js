@@ -2099,36 +2099,149 @@ let articles =
 );
 
 // ===============================
-// CURRENT FACTS
+// CURRENT FACTS — TAVILY SEARCH
 // ===============================
+
+const CURRENT_FACT_CACHE_MS =
+  5 * 60 * 1000;
+
+const currentFactCache =
+  new Map();
+
+
+function normalizeCurrentFactCacheKey(
+  question
+) {
+
+  return String(question || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+
 app.post(
   "/current-fact",
   requirePrototypeToken,
   async (req, res) => {
+
     try {
 
-      const {
-        question,
-        language
-      } = req.body || {};
-
+      /*
+       * Keep compatibility with the
+       * current APK.
+       *
+       * Later Android may send "query",
+       * but right now it sends "question".
+       */
       const cleanQuestion =
-        String(question || "")
-          .trim();
+        String(
+          req.body?.query ||
+          req.body?.question ||
+          ""
+        )
+          .trim()
+          .slice(0, 400);
+
 
       const cleanLanguage =
-        String(language || "same_as_user")
+        String(
+          req.body?.language ||
+          "same_as_user"
+        )
           .trim();
 
+
       if (!cleanQuestion) {
+
         return res.status(400).json({
           success: false,
-          error: "Missing question."
+          error:
+            "Missing current fact question."
         });
       }
 
+
+      if (
+        !process.env
+          .TAVILY_API_KEY
+      ) {
+
+        console.error(
+          "Missing TAVILY_API_KEY."
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            "Current fact search configuration error."
+        });
+      }
+
+
+      const cacheKey =
+        normalizeCurrentFactCacheKey(
+          cleanQuestion
+        );
+
+
+      const cached =
+        currentFactCache.get(
+          cacheKey
+        );
+
+
+      if (
+        cached &&
+        cached.expiresAt >
+          Date.now()
+      ) {
+
+        console.log(
+          "CURRENT FACT CACHE HIT:",
+          {
+            question:
+              cleanQuestion,
+
+            sourceCount:
+              cached.sources.length,
+
+            ageMs:
+              Date.now() -
+              cached.createdAt
+          }
+        );
+
+
+        return res.json({
+          success: true,
+
+          provider:
+            "tavily",
+
+          question:
+            cleanQuestion,
+
+          language:
+            cleanLanguage,
+
+          cached:
+            true,
+
+          answer:
+            cached.answer,
+
+          sources:
+            cached.sources,
+
+          checkedAt:
+            cached.checkedAt
+        });
+      }
+
+
       console.log(
-        "CURRENT FACT USED:",
+        "CURRENT FACT SEARCH:",
         {
           device:
             req.prototypeDevice.deviceId,
@@ -2143,210 +2256,408 @@ app.post(
             cleanLanguage,
 
           time:
-            new Date().toISOString()
+            new Date()
+              .toISOString()
         }
       );
 
 
-      const response =
-        await fetch(
-          "https://api.openai.com/v1/responses",
-          {
-            method: "POST",
+      /*
+       * Same architecture as NEWS:
+       *
+       * direct external information
+       * provider.
+       *
+       * NO OpenAI model here.
+       */
+      const controller =
+        new AbortController();
 
-            headers: {
-              Authorization:
-                `Bearer ${process.env.OPENAI_API_KEY}`,
 
-              "Content-Type":
-                "application/json"
-            },
-
-            body: JSON.stringify({
-
-              model:
-                process.env
-                  .OPENAI_CURRENT_FACT_MODEL ||
-                "gpt-4.1-mini",
-
-              tools: [
-                {
-                  type: "web_search"
-                }
-              ],
-
-              /*
-               * This endpoint exists ONLY
-               * for facts that require
-               * current verification.
-               *
-               * Therefore searching is
-               * mandatory.
-               */
-              tool_choice:
-                "required",
-
-              input: [
-                {
-                  role: "system",
-
-                  content: [
-                    {
-                      type: "input_text",
-
-                      text: `
-You are Refleksa's Current Fact Engine.
-
-Current date:
-${new Date().toISOString().slice(0, 10)}
-
-Your job is to verify factual information
-that may have changed over time.
-
-This is NOT a news summarizer.
-
-Examples include:
-
-- current heads of state
-- current presidents
-- current prime ministers
-- current monarchs
-- current popes
-- current CEOs
-- current office holders
-- current political leaders
-- current sports champions
-- current product versions
-- latest released products
-- current organizational leadership
-- whether a public position or status
-  is still current
-
-Use live web information before answering.
-
-Return a short, factual and verified answer.
-
-Answer in:
-${cleanLanguage}
-
-IMPORTANT:
-
-- Do not frame the answer as "news"
-  unless the user explicitly asked for news.
-
-- Do not say "according to the latest news".
-
-- Do not explain that you searched the web.
-
-- Do not mention tools or internal systems.
-
-- Do not invent information.
-
-- If the current fact cannot be verified
-  reliably, say so briefly.
-
-- Keep the answer concise and suitable
-  for a natural spoken conversation.
-                      `.trim()
-                    }
-                  ]
-                },
-
-                {
-                  role: "user",
-
-                  content: [
-                    {
-                      type: "input_text",
-                      text: cleanQuestion
-                    }
-                  ]
-                }
-              ],
-
-              max_output_tokens: 180
-            })
-          }
+      const timeoutId =
+        setTimeout(
+          () => {
+            controller.abort();
+          },
+          5_000
         );
 
 
-      const raw =
-        await response.text();
+      let tavilyResponse;
 
-
-      let data;
 
       try {
-        data =
-          JSON.parse(raw);
+
+        tavilyResponse =
+          await fetch(
+            "https://api.tavily.com/search",
+            {
+              method: "POST",
+
+              signal:
+                controller.signal,
+
+              headers: {
+
+                Authorization:
+                  `Bearer ${
+                    process.env
+                      .TAVILY_API_KEY
+                  }`,
+
+                "Content-Type":
+                  "application/json"
+              },
+
+              body: JSON.stringify({
+
+                query:
+                  cleanQuestion,
+
+                topic:
+                  "general",
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * Basic = 1 credit
+                 * and lower latency.
+                 */
+                search_depth:
+                  "basic",
+
+                max_results:
+                  5,
+
+                /*
+                 * Tavily retrieves evidence.
+                 *
+                 * Refleksa Realtime remains
+                 * the conversational brain.
+                 */
+                include_answer:
+                  false,
+
+                include_raw_content:
+                  false,
+
+                include_images:
+                  false
+              })
+            }
+          );
+
+      } catch (error) {
+
+        if (
+          error?.name ===
+          "AbortError"
+        ) {
+
+          console.warn(
+            "CURRENT FACT TAVILY TIMEOUT:",
+            {
+              question:
+                cleanQuestion,
+
+              timeoutMs:
+                5_000
+            }
+          );
+
+
+          return res.status(504).json({
+            success: false,
+            error:
+              "Current fact search timeout."
+          });
+        }
+
+
+        throw error;
+
+      } finally {
+
+        clearTimeout(
+          timeoutId
+        );
+      }
+
+
+      const raw =
+        await tavilyResponse.text();
+
+
+      let tavilyData;
+
+
+      try {
+
+        tavilyData =
+          JSON.parse(
+            raw
+          );
 
       } catch {
 
         console.error(
-          "CURRENT FACT OPENAI PARSE ERROR:",
+          "CURRENT FACT TAVILY PARSE ERROR:",
           raw
         );
 
-        return res.status(500).json({
+
+        return res.status(502).json({
           success: false,
           error:
-            "Current fact parse error."
+            "Current fact search parse error."
         });
       }
 
 
-      if (!response.ok) {
+      if (
+        !tavilyResponse.ok
+      ) {
 
         console.error(
-          "CURRENT FACT OPENAI ERROR:",
-          data
+          "CURRENT FACT TAVILY ERROR:",
+          {
+            status:
+              tavilyResponse.status,
+
+            data:
+              tavilyData
+          }
         );
 
+
         return res.status(
-          response.status
+          tavilyResponse.status
         ).json({
           success: false,
           error:
-            "Current fact lookup failed."
+            "Current fact search failed."
         });
       }
 
 
-      const answer =
-        data.output_text ||
-        data.output
-          ?.flatMap(
-            item =>
-              item.content || []
+      /*
+       * Keep the grounding small.
+       *
+       * Long search-result pages would
+       * unnecessarily slow Realtime.
+       */
+      const sources =
+        (
+          Array.isArray(
+            tavilyData?.results
           )
-          ?.find(
-            part =>
-              part.type ===
-              "output_text"
+            ? tavilyData.results
+            : []
+        )
+          .map(
+            result => {
+
+              const title =
+                String(
+                  result?.title || ""
+                )
+                  .trim();
+
+
+              const url =
+                String(
+                  result?.url || ""
+                )
+                  .trim();
+
+
+              const content =
+                String(
+                  result?.content || ""
+                )
+                  .trim()
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .slice(
+                    0,
+                    700
+                  );
+
+
+              const scoreRaw =
+                Number(
+                  result?.score
+                );
+
+
+              const score =
+                Number.isFinite(
+                  scoreRaw
+                )
+                  ? scoreRaw
+                  : 0;
+
+
+              return {
+                title,
+                url,
+                content,
+                score
+              };
+            }
           )
-          ?.text ||
-        "";
+          .filter(
+            result =>
+              result.title &&
+              result.url &&
+              result.content
+          )
+          .slice(
+            0,
+            4
+          );
 
 
-      if (!answer.trim()) {
+      if (
+        sources.length === 0
+      ) {
 
-        console.error(
-          "CURRENT FACT EMPTY ANSWER"
+        console.warn(
+          "CURRENT FACT NO RESULTS:",
+          {
+            question:
+              cleanQuestion
+          }
         );
 
-        return res.status(500).json({
+
+        return res.json({
           success: false,
+
+          provider:
+            "tavily",
+
+          question:
+            cleanQuestion,
+
           error:
-            "Empty current fact answer."
+            "No reliable current fact results found.",
+
+          sources: []
         });
+      }
+
+
+      /*
+       * IMPORTANT:
+       *
+       * Keep the existing APK contract.
+       *
+       * Android currently expects an
+       * "answer" string.
+       *
+       * This string is NOT generated by
+       * another LLM.
+       *
+       * It is compact web grounding that
+       * Realtime will convert into the
+       * natural spoken reply.
+       */
+      const answer =
+        [
+          `CURRENT WEB EVIDENCE FOR: ${cleanQuestion}`,
+          "",
+          "Use only the factual evidence below.",
+          "Prefer official or primary sources when available.",
+          "Prefer facts supported by multiple sources.",
+          "",
+          ...sources.map(
+            (
+              source,
+              index
+            ) =>
+              [
+                `SOURCE ${index + 1}`,
+                `Title: ${source.title}`,
+                `URL: ${source.url}`,
+                `Evidence: ${source.content}`,
+                `Relevance score: ${source.score}`
+              ]
+                .join("\n")
+          )
+        ]
+          .join("\n\n");
+
+
+      const checkedAt =
+        new Date()
+          .toISOString();
+
+
+      currentFactCache.set(
+        cacheKey,
+        {
+          createdAt:
+            Date.now(),
+
+          expiresAt:
+            Date.now() +
+            CURRENT_FACT_CACHE_MS,
+
+          checkedAt,
+
+          answer,
+
+          sources
+        }
+      );
+
+
+      /*
+       * Prevent unlimited memory growth.
+       */
+      if (
+        currentFactCache.size >
+        100
+      ) {
+
+        const oldestKey =
+          currentFactCache
+            .keys()
+            .next()
+            .value;
+
+
+        if (oldestKey) {
+
+          currentFactCache.delete(
+            oldestKey
+          );
+        }
       }
 
 
       console.log(
-        "CURRENT FACT SUCCESS:",
+        "CURRENT FACT RESULT:",
         {
           question:
             cleanQuestion,
+
+          provider:
+            "tavily",
+
+          tavilyResponseTime:
+            tavilyData
+              ?.response_time ??
+            null,
+
+          sourceCount:
+            sources.length,
+
+          cached:
+            false,
 
           answerLength:
             answer.length
@@ -2357,11 +2668,28 @@ IMPORTANT:
       return res.json({
         success: true,
 
-        answer:
-          answer.trim(),
+        provider:
+          "tavily",
 
-        checkedAt:
-          new Date().toISOString()
+        question:
+          cleanQuestion,
+
+        language:
+          cleanLanguage,
+
+        cached:
+          false,
+
+        answer,
+
+        sources,
+
+        providerResponseTime:
+          tavilyData
+            ?.response_time ??
+          null,
+
+        checkedAt
       });
 
 
@@ -2372,6 +2700,7 @@ IMPORTANT:
         err
       );
 
+
       return res.status(500).json({
         success: false,
         error:
@@ -2380,7 +2709,6 @@ IMPORTANT:
     }
   }
 );
-
 // ===============================
 // TIME
 // ===============================
