@@ -411,6 +411,8 @@ const safeLanguageCode =
 
   output_format: "mp3_44100_128"
 })
+      }
+    );
 
     if (!response.ok) {
       const err = await response.text();
