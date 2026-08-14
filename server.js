@@ -2128,12 +2128,12 @@ app.post(
     try {
 
       /*
-       * Keep compatibility with the
-       * current APK.
-       *
-       * Later Android may send "query",
-       * but right now it sends "question".
-       */
+      /*
+ * Accept "query" as the current contract.
+ *
+ * Keep temporary "question" fallback
+ * for older APK builds.
+ */
       const cleanQuestion =
         String(
           req.body?.query ||
@@ -2516,7 +2516,7 @@ app.post(
           )
           .slice(
             0,
-            4
+            3
           );
 
 
