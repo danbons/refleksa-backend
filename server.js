@@ -2201,6 +2201,23 @@ Be especially conservative with:
 - subtle colors
 - actions
 
+TEXT READING — CRITICAL:
+
+When the user asks what text is written
+on an object, sign, screen, label or document:
+
+- transcribe ONLY the characters you can
+  actually see
+- preserve the original spelling exactly
+- do not translate the text
+- do not autocorrect it
+- do not replace it with a more familiar word
+- do not infer what the word probably means
+
+If one or more characters are not clear enough,
+say that the text is not clear enough to read
+reliably instead of guessing.
+
 If a requested detail is partially visible
 or uncertain, preserve that uncertainty.
 
